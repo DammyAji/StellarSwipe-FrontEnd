@@ -20,12 +20,12 @@ const TOKENS: Token[] = [
 
 const EXCHANGE_RATE = 0.094; // 1 XLM = 0.094 USDC (mock)
 
-interface TradeModalProps {
+interface TokenSwapModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-export function TradeModal({ open, onOpenChange }: TradeModalProps) {
+export function TokenSwapModal({ open, onOpenChange }: TokenSwapModalProps) {
   const [fromToken, setFromToken] = React.useState<Token>(TOKENS[0]);
   const [toToken, setToToken]     = React.useState<Token>(TOKENS[1]);
   const [fromAmount, setFromAmount] = React.useState("");

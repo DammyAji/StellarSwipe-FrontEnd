@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDemoModeStore } from "@/store/useDemoModeStore";
 import { buildSignalPage, Signal, SignalFeedPage } from "@/lib/signals";
 import { NetworkError, ServerError } from "@/lib/api";
+import { queryOptions } from "@/lib/queryOptions";
 
 export function useSignalsFeed() {
   const { isDemoMode } = useDemoModeStore();
@@ -54,7 +55,7 @@ export function useSignalsFeed() {
   const { data: signals, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["signals", isDemoMode ? "demo" : "live"],
     queryFn: isDemoMode ? fetchDemoSignals : fetchLiveSignals,
-    staleTime: 60000,
+    ...queryOptions.signal,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
   });

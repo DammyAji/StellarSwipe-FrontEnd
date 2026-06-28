@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, BookmarkX, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SignalCard } from "@/components/SignalCard";
-import { useBookmarkStore } from "@/store/useBookmarkStore";
+import { useBookmarkStore, useBookmarkHydrated } from "@/store/useBookmarkStore";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { Signal } from "@/lib/signals";
 
@@ -49,8 +49,22 @@ function BookmarksEmptyState() {
   );
 }
 
+function BookmarksSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading bookmarks">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-32 rounded-2xl border border-white/10 bg-white/5 animate-pulse"
+        />
+      ))}
+    </div>
+  );
+}
+
 export function BookmarksPage({ initialSignals }: BookmarksPageProps) {
   const bookmarks = useBookmarkStore((state) => state.bookmarks);
+  const isHydrated = useBookmarkHydrated();
   const { assets } = usePortfolio();
 
   const bookmarkedSignals = initialSignals.filter((signal) => bookmarks.includes(signal.id));
@@ -73,7 +87,7 @@ export function BookmarksPage({ initialSignals }: BookmarksPageProps) {
 
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-foreground-muted">
-              {bookmarkedSignals.length} saved
+              {isHydrated ? `${bookmarkedSignals.length} saved` : "—"}
             </div>
             <Button asChild variant="outline" size="sm" className="gap-2">
               <Link href="/app">
@@ -84,7 +98,9 @@ export function BookmarksPage({ initialSignals }: BookmarksPageProps) {
           </div>
         </div>
 
-        {bookmarkedSignals.length === 0 ? (
+        {!isHydrated ? (
+          <BookmarksSkeleton />
+        ) : bookmarkedSignals.length === 0 ? (
           <BookmarksEmptyState />
         ) : (
           <div className="space-y-4">

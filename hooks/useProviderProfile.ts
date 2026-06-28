@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { SignalProvider, ProviderSignal } from "@/lib/types";
+import { queryOptions } from "@/lib/queryOptions";
 
 const mockProviderDetails: Record<string, SignalProvider> = {
   "provider-1": {
@@ -68,7 +69,7 @@ export function useProviderProfile(providerId: string) {
     queryFn: async () => {
       return mockProviderDetails[providerId] || null;
     },
-    staleTime: 60000,
+    ...queryOptions.provider,
   });
 }
 
@@ -78,6 +79,6 @@ export function useProviderSignals(providerId: string) {
     queryFn: async () => {
       return mockProviderSignals[providerId] || [];
     },
-    staleTime: 30000,
+    ...queryOptions.providerSignals,
   });
 }

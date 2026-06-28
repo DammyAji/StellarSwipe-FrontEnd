@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import {
   Shield,
   Smartphone,
@@ -331,13 +332,14 @@ export function TwoFactorSetupWizard({
               aria-label="QR code for authenticator app"
             >
               {!qrError ? (
-                <img
+                <Image
                   src={qrUrl}
                   alt="Scan this QR code with your authenticator app"
                   width={180}
                   height={180}
                   className="rounded-md border border-border bg-white p-2"
                   onError={() => setQrError(true)}
+                  unoptimized
                 />
               ) : (
                 <div className="flex h-44 w-44 items-center justify-center rounded-md border border-border bg-card text-center text-xs text-foreground-muted p-3">

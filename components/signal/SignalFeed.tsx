@@ -19,6 +19,7 @@ import { Search, X, SlidersHorizontal } from "lucide-react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
 import { SyncStatusIndicator } from "@/components/SyncStatusIndicator";
 import { RelativeTimestamp } from "@/components/RelativeTimestamp";
+import { queryOptions as queryOpts } from "@/lib/queryOptions";
 
 interface SignalResponse {
   items: Signal[];
@@ -29,8 +30,6 @@ interface SignalResponse {
 }
 
 const PAGE_SIZE = 10;
-// #98: 5-minute stale time so recently-viewed pages are served from cache
-const STALE_TIME = 1000 * 60 * 5;
 
 interface SignalFeedProps {
   /** Server-fetched first page — eliminates the client waterfall on initial load */
@@ -78,7 +77,7 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
     },
     getNextPageParam: (lastPage: SignalResponse) => lastPage.nextPage,
     initialPageParam: 1,
-    staleTime: STALE_TIME,
+    staleTime: queryOpts.signal.staleTime,
     placeholderData: (prev) => prev,
     // Seed the cache with the server-fetched first page so no client waterfall occurs
     ...(initialData && {

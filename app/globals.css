@@ -52,6 +52,130 @@
 }
 
 @layer base {
+  @media (forced-colors: active) {
+    :root {
+      color-scheme: dark;
+      --background: Canvas;
+      --surface: Canvas;
+      --surface-high: Canvas;
+      --overlay: Canvas;
+      --foreground: CanvasText;
+      --foreground-muted: CanvasText;
+      --foreground-subtle: GrayText;
+      --border: CanvasText;
+      --border-strong: CanvasText;
+      --input: Canvas;
+      --ring: Highlight;
+      --accent-primary: Highlight;
+      --accent-sky: Highlight;
+      --accent-success: Highlight;
+      --accent-danger: Highlight;
+      --accent-warning: Highlight;
+      --accent-market: Highlight;
+    }
+
+    * {
+      forced-color-adjust: auto;
+    }
+
+    button,
+    input,
+    select,
+    textarea,
+    [role="button"],
+    [role="switch"],
+    [role="tab"],
+    [role="dialog"],
+    [tabindex]:not([tabindex="-1"]) {
+      forced-color-adjust: auto;
+      color: CanvasText;
+      background-color: Canvas;
+      border-color: CanvasText;
+    }
+
+    :focus-visible {
+      outline: 2px solid Highlight !important;
+      outline-offset: 2px;
+    }
+
+    .bg-primary,
+    .bg-destructive,
+    .bg-accent-primary,
+    .bg-blue-500,
+    .bg-blue-500\/20,
+    .bg-green-500,
+    .bg-green-500\/20,
+    .bg-red-500,
+    .bg-red-500\/20,
+    .bg-emerald-500,
+    .bg-emerald-500\/10,
+    .bg-yellow-500,
+    .bg-yellow-500\/10,
+    .bg-slate-500,
+    .bg-slate-500\/10,
+    .bg-white\/5,
+    .bg-white\/10 {
+      background-color: Highlight !important;
+      border-color: HighlightText !important;
+      color: HighlightText !important;
+    }
+
+    .text-blue-400,
+    .text-blue-500,
+    .text-green-400,
+    .text-green-500,
+    .text-red-400,
+    .text-red-500,
+    .text-emerald-300,
+    .text-emerald-400,
+    .text-yellow-400,
+    .text-slate-400,
+    .text-slate-300,
+    .text-white,
+    .text-primary-foreground,
+    .text-destructive-foreground {
+      color: HighlightText !important;
+    }
+
+    .border-blue-500\/30,
+    .border-blue-500\/40,
+    .border-green-500\/40,
+    .border-red-500\/40,
+    .border-emerald-500\/20,
+    .border-emerald-500\/40,
+    .border-yellow-500\/40,
+    .border-slate-600\/60,
+    .border-white\/10,
+    .border-white\/20,
+    .border-border,
+    .border-input {
+      border-color: CanvasText !important;
+    }
+
+    .fc-badge,
+    .fc-pill,
+    .fc-toggle {
+      border: 2px solid CanvasText;
+      background-color: Canvas;
+      color: CanvasText;
+    }
+
+    .fc-badge {
+      padding-inline: 0.625rem;
+    }
+
+    .fc-pill {
+      border-radius: 9999px;
+    }
+
+    .fc-toggle {
+      border-radius: 9999px;
+      outline-offset: 2px;
+    }
+  }
+}
+
+@layer base {
   /*
    * StellarSwipe design tokens — dark-first theme.
    * All values are HSL channels (no `hsl()` wrapper) so Tailwind can apply
@@ -89,7 +213,7 @@
 
   :root {
     color-scheme: light;
-    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     --background:     0 0% 98%;
     --surface:        0 0% 100%;
@@ -293,4 +417,134 @@
   .z-modal     { z-index: var(--z-modal); }
   .z-toast     { z-index: var(--z-toast); }
   .z-loading   { z-index: var(--z-loading); }
+}
+
+/* ── Print-friendly styling ──────────────────────────────────────────────── */
+@media print {
+  /* Hide non-essential UI */
+  header,
+  footer,
+  button,
+  select,
+  input,
+  a[href^="https://stellar.expert"],
+  [role="complementary"],
+  .opacity-0.group-hover\:opacity-100,
+  .onboarding-flow,
+  .wallet-selection-modal,
+  .low-balance-alert,
+  .trade-modal,
+  .bg-white\/5.p-4.rounded,
+  .flex.gap-3,
+  .border-b.border-border\/40.pb-2,
+  .custom-scrollbar::-webkit-scrollbar,
+  .text-\[8px\].text-slate-500 {
+    display: none !important;
+  }
+
+  /* Force light background and high contrast */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    color-scheme: light !important;
+  }
+
+  /* Ensure containers layout vertically without complex columns */
+  .grid {
+    display: block !important;
+  }
+
+  .grid > * {
+    margin-bottom: 2rem !important;
+    width: 100% !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Remove dark surface colors and enforce black-and-white borders */
+  .bg-card,
+  .bg-slate-950\/90,
+  .bg-slate-950\/95,
+  .bg-background\/80,
+  .bg-slate-900\/90,
+  .bg-white\/5,
+  .rounded-3xl,
+  .rounded-xl {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+
+  /* Text color adjustments */
+  .text-foreground,
+  .text-slate-300,
+  .text-white,
+  h1,
+  h2,
+  h3 {
+    color: #000000 !important;
+  }
+
+  .text-foreground-muted,
+  .text-muted-foreground,
+  .text-slate-400,
+  .text-gray-400,
+  .text-foreground-subtle,
+  .text-slate-500 {
+    color: #334155 !important;
+  }
+
+  /* Enforce legible print colors for P&L indicators */
+  .text-green-400,
+  .text-green-600,
+  .text-accent-success,
+  .bg-green-500\/15 {
+    color: #166534 !important; /* Dark Green */
+    background: transparent !important;
+  }
+
+  .text-red-400,
+  .text-red-600,
+  .text-accent-danger,
+  .bg-red-500\/15 {
+    color: #991b1b !important; /* Dark Red */
+    background: transparent !important;
+  }
+
+  .bg-green-500\/10,
+  .bg-red-500\/10 {
+    background: transparent !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* SVGs should scale nicely */
+  svg {
+    max-width: 100% !important;
+    height: auto !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Trade history and signal lists pagination rules */
+  article,
+  li {
+    page-break-inside: avoid !important;
+    border: 1px solid #cbd5e1 !important;
+    margin-bottom: 0.75rem !important;
+    background: #ffffff !important;
+  }
+
+  section,
+  ul,
+  .space-y-3 {
+    page-break-inside: auto !important;
+  }
+
+  /* Prevent awkward page cuts on cards */
+  .rounded-3xl,
+  .rounded-xl,
+  .border,
+  .card {
+    page-break-inside: avoid !important;
+  }
 }

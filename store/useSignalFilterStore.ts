@@ -18,6 +18,8 @@ interface SignalFilterState {
   provider: string;
   bookmarkedOnly: boolean;
   sortOrder: FeedSortOrder;
+  _hasHydrated: boolean;
+  setHasHydrated: (hydrated: boolean) => void;
   setDirection: (d: FilterDirection) => void;
   setAsset: (a: string) => void;
   setProvider: (p: string) => void;
@@ -34,6 +36,8 @@ export const useSignalFilterStore = create<SignalFilterState>()(
       provider: "",
       bookmarkedOnly: false,
       sortOrder: "latest",
+      _hasHydrated: false,
+      setHasHydrated: (hydrated) => set({ _hasHydrated: hydrated }),
       setDirection: (direction) => set({ direction }),
       setAsset: (asset) => set({ asset }),
       setProvider: (provider) => set({ provider }),
@@ -48,6 +52,14 @@ export const useSignalFilterStore = create<SignalFilterState>()(
           sortOrder: "latest",
         }),
     }),
-    { name: "signal-filter-store" }
+    {
+      name: "signal-filter-store",
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
   )
 );
+
+/** Returns `true` once localStorage has been read and state is stable. */
+export const useSignalFilterHydrated = () => useSignalFilterStore((s) => s._hasHydrated);

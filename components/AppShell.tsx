@@ -12,12 +12,15 @@ import { PageTransition } from "@/components/PageTransition";
 import { PortfolioAllocationChart } from "@/components/chart/PortfolioAllocationChart";
 import { PortfolioSummaryCards } from "@/components/PortfolioSummaryCards";
 import { PnLWidget } from "@/components/chart/PnLWidget";
+import { DashboardWidgets } from "@/components/DashboardWidgets";
 import { OnChainConfirmationStatus } from "@/components/OnChainConfirmationStatus";
 import { TransactionActivityFeed } from "@/components/TransactionActivityFeed";
 import { PositionStopLossControl } from "@/components/PositionStopLossControl";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { SignalCard } from "@/components/SignalCard";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { PortfolioErrorBoundary } from "@/components/PortfolioErrorBoundary";
+import { SignalFeedErrorBoundary } from "@/components/signal/SignalFeedErrorBoundary";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -127,31 +130,47 @@ export function AppShell({ children }: AppShellProps) {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
             <div className="flex flex-col gap-4 min-w-0">
               {/* Signal feed streamed in via Suspense */}
-              {children}
+              <SignalFeedErrorBoundary>
+                {children}
+              </SignalFeedErrorBoundary>
 
-              <div className="flex w-full max-w-md flex-col items-center gap-3 px-4 sm:px-0">
-                <SignalCard
-                  loading={loading}
-                  onTrade={handleTrade}
-                  providerStake={50000}
-                  providerReputation={85}
-                  portfolioBalance={portfolioBalance}
-                />
-                <div className="flex gap-3">
-                  <button
-                    onClick={toggleLoading}
-                    className="text-xs text-foreground-subtle hover:text-foreground-muted underline transition-colors"
-                  >
-                    Preview skeleton
-                  </button>
-                  <button
-                    onClick={() => setModalOpen(true)}
-                    className="text-xs text-foreground-subtle hover:text-foreground-muted underline transition-colors"
-                  >
-                    Open trade modal
-                  </button>
+              <PortfolioErrorBoundary>
+                <div className="flex w-full max-w-md flex-col items-center gap-3 px-4 sm:px-0">
+                  <SignalCard
+                    loading={loading}
+                    onTrade={handleTrade}
+                    providerStake={50000}
+                    providerReputation={85}
+                    portfolioBalance={portfolioBalance}
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={toggleLoading}
+                      className="text-xs text-foreground-subtle hover:text-foreground-muted underline transition-colors"
+                    >
+                      Preview skeleton
+                    </button>
+                    <button
+                      onClick={() => setModalOpen(true)}
+                      className="text-xs text-foreground-subtle hover:text-foreground-muted underline transition-colors"
+                    >
+                      Open trade modal
+                    </button>
+                  </div>
                 </div>
+              </PortfolioErrorBoundary>
+
+              <div className="w-full max-w-md">
+                <PositionStopLossControl />
               </div>
+
+              <div className="w-full">
+                <TransactionActivityFeed />
+              </div>
+            </div>
+            {/* Right Column: Dashboard widgets */}
+            <div className="w-full flex flex-col gap-6">
+              <DashboardWidgets />
             </div>
           </div>
         </div>

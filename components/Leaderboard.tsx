@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { useLeaderboardStore, type LeaderboardEntry } from "../store/leaderboardStore";
 import { formatNumber } from "../lib/utils";
 
@@ -33,10 +34,13 @@ export const Leaderboard: React.FC = () => {
             className="p-4 bg-white bg-opacity-70 backdrop-filter backdrop-blur-lg rounded-xl shadow hover:shadow-xl transition-shadow"
           >
             <div className="flex items-center space-x-4">
-              <img
+              <Image
                 src={entry.avatarUrl}
                 alt={entry.username}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-full object-cover border-2 border-primary"
+                sizes="64px"
               />
               <div className="flex-1">
                 <h2 className="text-xl font-semibold text-gray-800">

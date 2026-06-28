@@ -5,14 +5,37 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - 'src/components/**'
+      - 'src/app/**'
+      - 'stories/**'
+      - '.storybook/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+# ── Baseline approval process ─────────────────────────────────────────────────
+# 1. On the FIRST run after adding new stories, Chromatic captures baselines.
+# 2. A project maintainer must review and ACCEPT the baselines in the Chromatic
+#    UI (https://www.chromatic.com) before they are used for comparisons.
+# 3. On subsequent PRs, Chromatic diffs every snapshot against the approved
+#    baseline. Any visual change surfaces as a "diff" requiring review.
+# 4. The [Visual Regression] story in TradeConfirmationModal.stories.tsx
+#    intentionally misaligns the fee row — approve the normal baseline first,
+#    then this story confirms the tooling catches the change.
+# 5. Set exitZeroOnChanges: false (or remove it) to block PRs on unreviewed diffs.
+
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   chromatic:
     runs-on: ubuntu-latest
+    outputs:
+      storybookUrl: ${{ steps.chromatic.outputs.storybookUrl }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # required for Chromatic TurboSnap
 
       - uses: actions/setup-node@v4
         with:
@@ -22,9 +45,45 @@ jobs:
       - run: npm ci
 
       - name: Run Chromatic
+        id: chromatic
         uses: chromaui/action@latest
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          # Allow PRs to pass even when visual changes are detected;
+          # a human reviewer must accept/reject diffs in the Chromatic UI.
           exitZeroOnChanges: true
+          # Only snapshot stories affected by changed files (faster CI).
           onlyChanged: true
-          storybookBuildDir: storybook-static
+          autoAcceptChanges: false
+
+      - name: Post Storybook preview URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.chromatic.outputs.storybookUrl }}';
+            const marker = '<!-- chromatic-storybook-preview -->';
+            const body = `${marker}\n### 📖 Storybook Preview\n${url}`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { Metadata } from "next";
-import { Shield, ChevronRight } from "lucide-react";
+import { Bug, ChevronRight, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { TwoFactorSetupWizard, DisableTwoFactor } from "@/components/TwoFactorSetupWizard";
+import {
+  DisableTwoFactor,
+  TwoFactorSetupWizard,
+} from "@/components/TwoFactorSetupWizard";
+import { bugBountyProgram } from "@/content/security";
 
 export default function SecuritySettingsPage() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -77,6 +80,81 @@ export default function SecuritySettingsPage() {
             onCancel={() => setShowSetup(false)}
           />
         )}
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Bug size={16} className="text-blue-400" aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-foreground">
+                {bugBountyProgram.title}
+              </h2>
+            </div>
+            <p className="text-xs text-foreground-muted">
+              {bugBountyProgram.summary}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-5 text-sm">
+            <section aria-labelledby="bug-bounty-scope">
+              <h3
+                id="bug-bounty-scope"
+                className="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
+                Scope
+              </h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-foreground-muted">
+                {bugBountyProgram.scope.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section aria-labelledby="bug-bounty-rewards">
+              <h3
+                id="bug-bounty-rewards"
+                className="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
+                Reward review
+              </h3>
+              <dl className="mt-2 space-y-3">
+                {bugBountyProgram.rewardTiers.map((tier) => (
+                  <div key={tier.severity}>
+                    <dt className="font-medium text-foreground">
+                      {tier.severity}
+                    </dt>
+                    <dd className="text-xs leading-5 text-foreground-muted">
+                      {tier.description}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section aria-labelledby="bug-bounty-submit">
+              <h3
+                id="bug-bounty-submit"
+                className="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              >
+                Submission process
+              </h3>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-foreground-muted">
+                {bugBountyProgram.submissionSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </section>
+
+            <Button size="sm" asChild>
+              <a
+                href={bugBountyProgram.contact.href}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {bugBountyProgram.contact.label}
+                <ChevronRight size={13} aria-hidden="true" />
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </main>
   );

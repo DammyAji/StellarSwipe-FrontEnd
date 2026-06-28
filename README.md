@@ -43,6 +43,16 @@ Run dev server:
 
 Storybook provides an isolated visual catalog for all core UI primitives and components.
 
+### PR Previews
+
+Every pull request that touches `src/components/`, `src/app/`, `stories/`, or `.storybook/` automatically gets a hosted Storybook preview via [Chromatic](https://www.chromatic.com/):
+
+1. Open the pull request on GitHub.
+2. Look for the **📖 Storybook Preview** comment posted (or updated) by the CI bot — it contains the direct link.
+3. Alternatively, scroll to the **Checks** section and click the **Chromatic Visual Regression** check → **Details**.
+
+The preview is hosted by Chromatic and tied to the PR's build — no local setup required. Previews expire naturally when Chromatic's retention policy applies after the PR is merged or closed.
+
 ### Run locally
 
 ```bash

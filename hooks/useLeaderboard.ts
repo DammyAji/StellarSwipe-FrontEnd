@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { SignalProvider } from "@/lib/types";
+import { queryOptions } from "@/lib/queryOptions";
 
 const mockProviders: SignalProvider[] = [
   {
@@ -60,6 +61,6 @@ export function useLeaderboard() {
       // In real app, fetch from API
       return mockProviders;
     },
-    staleTime: 60000,
+    ...queryOptions.leaderboard,
   });
 }

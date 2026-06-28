@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +10,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { useComparisonStore } from "@/store/useComparisonStore";
 import { MetricToggleBar } from "@/components/comparison/MetricToggleBar";
 import { fetchSignals } from "@/lib/api";
+import { ComparisonErrorBoundary } from "@/components/ComparisonErrorBoundary";
 
 const ComparisonCard = dynamic(
   () => import("@/components/comparison/ComparisonCard").then((m) => m.ComparisonCard),
@@ -45,7 +46,7 @@ function computeBestValues(signals: ReturnType<typeof useComparisonStore.getStat
   return best;
 }
 
-export default function ComparePage() {
+function ComparePageContent() {
   const { signals, removeSignal, clearSignals, hiddenMetrics, toggleMetric, canAdd, addSignal } = useComparisonStore();
   const [addPanelOpen, setAddPanelOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -232,5 +233,13 @@ export default function ComparePage() {
         }
       `}</style>
     </PageTransition>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={null}>
+      <ComparePageContent />
+    </Suspense>
   );
 }

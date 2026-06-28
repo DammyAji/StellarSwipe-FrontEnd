@@ -427,7 +427,7 @@ export function SignalCard({
                     <Share2 size={16} />
                   </Button>
                   {showShareMenu && (
-                    <div className="absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg z-20 min-w-[150px] p-1">
+                    <div className="share-menu absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg z-20 min-w-[150px] p-1">
                       <button
                         onClick={handleCopyLink}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded flex items-center gap-2"

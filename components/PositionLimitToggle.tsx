@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Info, Shield, SlidersHorizontal } from "lucide-react";
-import { usePositionLimitStore } from "@/store/usePositionLimitStore";
+import { usePositionLimitStore, usePositionLimitHydrated } from "@/store/usePositionLimitStore";
 
 interface PositionLimitToggleProps {
   /** Total portfolio balance in XLM (or base asset) */
@@ -18,6 +18,7 @@ export function PositionLimitToggle({
 }: PositionLimitToggleProps) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const { enabled, percentage, toggle, setPercentage } = usePositionLimitStore();
+  const isHydrated = usePositionLimitHydrated();
 
   const portfolioAvailable = portfolioBalance !== null && portfolioBalance !== undefined && !isLoading;
 
@@ -30,6 +31,18 @@ export function PositionLimitToggle({
     const val = Math.min(100, Math.max(1, Number(e.target.value)));
     setPercentage(val);
   };
+
+  // Render a stable skeleton until the persisted store state is available.
+  if (!isHydrated) {
+    return (
+      <div className="w-full rounded-xl border border-border bg-surface/60 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="h-4 w-32 rounded bg-surface-high animate-pulse" />
+          <div className="h-6 w-11 rounded-full bg-surface-high animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full rounded-xl border border-border bg-surface/60 p-4 transition-colors hover:border-border-strong">
@@ -89,7 +102,7 @@ export function PositionLimitToggle({
           aria-label="Toggle position limit"
           disabled={!portfolioAvailable}
           onClick={toggle}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background fc-toggle ${
             !portfolioAvailable
               ? "cursor-not-allowed opacity-40"
               : enabled

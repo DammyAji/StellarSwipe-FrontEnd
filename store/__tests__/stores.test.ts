@@ -5,6 +5,11 @@ import {
   useTransactionStore,
   type TransactionHistoryItem,
 } from "@/store/useTransactionStore";
+import { useDemoModeStore } from "@/store/useDemoModeStore";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { usePositionLimitStore } from "@/store/usePositionLimitStore";
+import { useSignalFilterStore } from "@/store/useSignalFilterStore";
+import { useThemeStore } from "@/store/useThemeStore";
 
 // ── useWalletStore ────────────────────────────────────────────────────────────
 
@@ -245,5 +250,37 @@ describe("useTransactionStore", () => {
     expect(useTransactionStore.getState().preservedInput).toEqual({ amount: "42", type: "LIMIT" });
     useTransactionStore.getState().setPreservedInput(null);
     expect(useTransactionStore.getState().preservedInput).toBeNull();
+  });
+});
+
+// ── Rehydration guard — _hasHydrated flag ────────────────────────────────────
+
+describe("Rehydration guard – _hasHydrated flag", () => {
+  const stores = [
+    { name: "useBookmarkStore", store: useBookmarkStore },
+    { name: "useDemoModeStore", store: useDemoModeStore },
+    { name: "useOnboardingStore", store: useOnboardingStore },
+    { name: "usePositionLimitStore", store: usePositionLimitStore },
+    { name: "useSignalFilterStore", store: useSignalFilterStore },
+    { name: "useThemeStore", store: useThemeStore },
+  ] as const;
+
+  stores.forEach(({ name, store }) => {
+    it(`${name}: _hasHydrated starts false`, () => {
+      (store as any).setState({ _hasHydrated: false });
+      expect((store.getState() as any)._hasHydrated).toBe(false);
+    });
+
+    it(`${name}: setHasHydrated(true) sets _hasHydrated to true`, () => {
+      (store as any).setState({ _hasHydrated: false });
+      (store.getState() as any).setHasHydrated(true);
+      expect((store.getState() as any)._hasHydrated).toBe(true);
+    });
+
+    it(`${name}: setHasHydrated(false) resets _hasHydrated`, () => {
+      (store as any).setState({ _hasHydrated: true });
+      (store.getState() as any).setHasHydrated(false);
+      expect((store.getState() as any)._hasHydrated).toBe(false);
+    });
   });
 });

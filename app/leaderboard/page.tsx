@@ -6,11 +6,20 @@ import { useLeaderboard } from "@/hooks/useLeaderboard";
 import { SignalProvider } from "@/lib/types";
 import { Loader2, ChevronUp, ChevronDown } from "lucide-react";
 import { PageTransition } from "@/components/PageTransition";
+import { LeaderboardErrorBoundary } from "@/components/LeaderboardErrorBoundary";
 
 type SortField = "rank" | "overallScore" | "winRate" | "recentPerformance";
 type SortDirection = "asc" | "desc";
 
 export default function LeaderboardPage() {
+  return (
+    <LeaderboardErrorBoundary>
+      <LeaderboardPageInner />
+    </LeaderboardErrorBoundary>
+  );
+}
+
+function LeaderboardPageInner() {
   const router = useRouter();
   const { data: providers, isLoading, error } = useLeaderboard();
   const [sortField, setSortField] = useState<SortField>("rank");

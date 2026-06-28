@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   FilterDirection,
   useSignalFilterStore,
+  useSignalFilterHydrated,
 } from "@/store/useSignalFilterStore";
 
 const DIRECTIONS: { label: string; value: FilterDirection }[] = [
@@ -38,7 +39,27 @@ export function SignalFeedFilters({
     setBookmarkedOnly,
     reset,
   } = useSignalFilterStore();
+  const isHydrated = useSignalFilterHydrated();
   const assetInputRef = useRef<HTMLInputElement>(null);
+
+  // Render a neutral placeholder until persisted filters are loaded.
+  // This prevents filter state from flickering from defaults to saved values.
+  if (!isHydrated) {
+    return (
+      <section
+        aria-label="Signal feed filters"
+        aria-busy="true"
+        className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-3 sm:p-4"
+      >
+        <div className="h-4 w-16 rounded bg-surface-high animate-pulse" />
+        <div className="flex gap-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-7 w-16 rounded-full bg-surface-high animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   const isActive =
     direction !== "ALL" || asset !== "" || provider !== "" || bookmarkedOnly;

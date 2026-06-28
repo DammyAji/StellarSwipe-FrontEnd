@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
-import { TradeModal } from "@/components/trade/TradeModal";
+import { TokenSwapModal } from "@/components/trade/TokenSwapModal";
 import { CTABanner } from "@/components/CTABanner";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Footer } from "@/components/Footer";
@@ -95,7 +95,7 @@ export default function Home() {
         <Footer />
       </main>
 
-      <TradeModal open={tradeOpen} onOpenChange={setTradeOpen} />
+      <TokenSwapModal open={tradeOpen} onOpenChange={setTradeOpen} />
     </PageTransition>
   );
 }

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { ToastProvider } from "@/components/ui/toast";
-import { useToastStore } from "@/store/useToastStore";
+import { useToast } from "@/lib/toast";
 import { Button } from "@/components/ui/button";
 
 const meta: Meta<typeof ToastProvider> = {
@@ -21,9 +21,9 @@ export default meta;
 type Story = StoryObj<typeof ToastProvider>;
 
 function ToastTrigger({ tone, title, description }: { tone: "success" | "error" | "info"; title: string; description?: string }) {
-  const show = useToastStore((s) => s.show);
+  const toast = useToast();
   return (
-    <Button onClick={() => show({ tone, title, description })}>
+    <Button onClick={() => toast[tone](title, { description })}>
       Show {tone} toast
     </Button>
   );

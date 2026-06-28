@@ -1,0 +1,291 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`SecuritySettingsPage renders the public bug-bounty program section 1`] = `
+<div>
+  <main
+    class="min-h-screen bg-background px-4 py-6 sm:px-6 sm:py-8 lg:px-8 text-foreground"
+  >
+    <div
+      class="mx-auto w-full max-w-2xl space-y-6"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-shield text-blue-400"
+          fill="none"
+          height="20"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </svg>
+        <h1
+          class="text-xl font-semibold text-foreground"
+        >
+          Account Security
+        </h1>
+      </div>
+      <div
+        class="rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+      >
+        <div
+          class="flex flex-col gap-1.5 p-5 pb-3"
+        >
+          <div
+            class="flex items-center justify-between"
+          >
+            <h2
+              class="text-sm font-semibold text-foreground"
+            >
+              Two-Factor Authentication
+            </h2>
+            <span
+              aria-label="2FA disabled"
+              class="rounded-full px-2 py-0.5 text-[11px] font-medium bg-foreground-muted/10 text-foreground-muted"
+            >
+              Disabled
+            </span>
+          </div>
+          <p
+            class="text-xs text-foreground-muted"
+          >
+            Add an extra layer of security to your account by requiring a verification code on sign-in.
+          </p>
+        </div>
+        <div
+          class="px-5 pb-5 space-y-3"
+        >
+          <button
+            aria-label="Set up two-factor authentication"
+            class="inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-8 rounded-md px-3 text-xs gap-1.5"
+          >
+            Set up 2FA 
+            <svg
+              class="lucide lucide-chevron-right"
+              fill="none"
+              height="13"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="13"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div
+        class="rounded-xl border border-border bg-card text-card-foreground shadow-sm"
+      >
+        <div
+          class="flex flex-col gap-1.5 p-5 pb-3"
+        >
+          <div
+            class="flex items-center gap-2"
+          >
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-bug text-blue-400"
+              fill="none"
+              height="16"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="16"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m8 2 1.88 1.88"
+              />
+              <path
+                d="M14.12 3.88 16 2"
+              />
+              <path
+                d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"
+              />
+              <path
+                d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"
+              />
+              <path
+                d="M12 20v-9"
+              />
+              <path
+                d="M6.53 9C4.6 8.8 3 7.1 3 5"
+              />
+              <path
+                d="M6 13H2"
+              />
+              <path
+                d="M3 21c0-2.1 1.7-3.9 3.8-4"
+              />
+              <path
+                d="M20.97 5c0 2.1-1.6 3.8-3.5 4"
+              />
+              <path
+                d="M22 13h-4"
+              />
+              <path
+                d="M17.2 17c2.1.1 3.8 1.9 3.8 4"
+              />
+            </svg>
+            <h2
+              class="text-sm font-semibold text-foreground"
+            >
+              Responsible Disclosure
+            </h2>
+          </div>
+          <p
+            class="text-xs text-foreground-muted"
+          >
+            Security researchers can report vulnerabilities that affect StellarSwipe accounts, wallets, trading flows, or platform data integrity.
+          </p>
+        </div>
+        <div
+          class="px-5 pb-5 space-y-5 text-sm"
+        >
+          <section
+            aria-labelledby="bug-bounty-scope"
+          >
+            <h3
+              class="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              id="bug-bounty-scope"
+            >
+              Scope
+            </h3>
+            <ul
+              class="mt-2 list-disc space-y-1 pl-5 text-foreground-muted"
+            >
+              <li>
+                Authentication and session handling
+              </li>
+              <li>
+                Wallet connection and transaction-signing flows
+              </li>
+              <li>
+                Signal, portfolio, subscription, and webhook data access
+              </li>
+              <li>
+                Cross-site scripting, injection, or authorization bypasses
+              </li>
+            </ul>
+          </section>
+          <section
+            aria-labelledby="bug-bounty-rewards"
+          >
+            <h3
+              class="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              id="bug-bounty-rewards"
+            >
+              Reward review
+            </h3>
+            <dl
+              class="mt-2 space-y-3"
+            >
+              <div>
+                <dt
+                  class="font-medium text-foreground"
+                >
+                  Critical
+                </dt>
+                <dd
+                  class="text-xs leading-5 text-foreground-muted"
+                >
+                  Eligible for the highest reward review when a report demonstrates direct wallet, account, or funds-risk impact.
+                </dd>
+              </div>
+              <div>
+                <dt
+                  class="font-medium text-foreground"
+                >
+                  High
+                </dt>
+                <dd
+                  class="text-xs leading-5 text-foreground-muted"
+                >
+                  Eligible for reward review when a report demonstrates account takeover, sensitive data exposure, or privileged action abuse.
+                </dd>
+              </div>
+              <div>
+                <dt
+                  class="font-medium text-foreground"
+                >
+                  Medium
+                </dt>
+                <dd
+                  class="text-xs leading-5 text-foreground-muted"
+                >
+                  Eligible for recognition or a smaller reward review when a report demonstrates limited but reproducible security impact.
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section
+            aria-labelledby="bug-bounty-submit"
+          >
+            <h3
+              class="text-xs font-semibold uppercase tracking-wide text-foreground-muted"
+              id="bug-bounty-submit"
+            >
+              Submission process
+            </h3>
+            <ol
+              class="mt-2 list-decimal space-y-1 pl-5 text-foreground-muted"
+            >
+              <li>
+                Open a private GitHub vulnerability report with a clear summary and affected route or component.
+              </li>
+              <li>
+                Include reproducible steps, expected impact, screenshots or logs, and any proof-of-concept payloads.
+              </li>
+              <li>
+                Allow maintainers time to triage and remediate before public disclosure.
+              </li>
+            </ol>
+          </section>
+          <a
+            class="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-8 rounded-md px-3 text-xs"
+            href="https://github.com/AgesEmpire/StellarSwipe-FrontEnd/security/advisories/new"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Submit a private vulnerability report
+            <svg
+              aria-hidden="true"
+              class="lucide lucide-chevron-right"
+              fill="none"
+              height="13"
+              stroke="currentColor"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              viewBox="0 0 24 24"
+              width="13"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="m9 18 6-6-6-6"
+              />
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+`;

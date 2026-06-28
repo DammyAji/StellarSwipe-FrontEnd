@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@/hooks/useWallet";
 import { usePortfolioStore, type PortfolioAsset } from "@/store/usePortfolioStore";
+import { queryOptions } from "@/lib/queryOptions";
 
 function withPercentages(
   assets: Omit<PortfolioAsset, "percentage">[]
@@ -47,7 +48,7 @@ export function usePortfolio() {
     queryKey: ["portfolio", publicKey],
     queryFn: fetchPortfolio,
     enabled: connected && !!publicKey,
-    staleTime: 60000,
+    ...queryOptions.portfolio,
   });
 
   useEffect(() => {

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/knip@next/schema.json",
+  "entry": [
+    "app/**/page.tsx",
+    "app/**/layout.tsx",
+    "app/globals.css"
+  ],
+  "project": [
+    "app/**/*.{ts,tsx}",
+    "components/**/*.{ts,tsx}",
+    "hooks/**/*.{ts,tsx}",
+    "lib/**/*.{ts,tsx}",
+    "services/**/*.{ts,tsx}",
+    "store/**/*.{ts,tsx}",
+    "src/**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    "components/ui/**",
+    "**/*.test.{ts,tsx}",
+    "**/__tests__/**"
+  ],
+  "ignoreExports": [
+    "store/useDemoModeStore.ts:toggleDemoMode",
+    "store/usePerformanceMonitoringStore.ts:trimArray",
+    "store/usePerformanceMonitoringStore.ts:buildNetworkBreakdown",
+    "store/usePositionLimitStore.ts:togglePositionLimit",
+    "store/usePortfolioStore.ts:usePortfolioStore"
+  ],
+  "ignoreDependencies": [
+    "eslint-config-next",
+    "@testing-library/react",
+    "jest-axe",
+    "@types/jest-axe"
+  ]
+}
