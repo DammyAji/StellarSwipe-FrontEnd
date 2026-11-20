@@ -45,6 +45,7 @@ import {
   formatAnnotationDate,
 } from "@/components/chart/ChartAnnotations";
 import { toDayKey, useChartAnnotations, type ChartAnnotation } from "@/hooks/useChartAnnotations";
+import { LargestDailyMovements } from "./LargestDailyMovements";
 
 const CHART_ID = "portfolio-performance-benchmark";
 const PORTFOLIO_METRIC = "portfolio-value";
@@ -102,6 +103,7 @@ export function PortfolioPerformanceBenchmarkChart({
   const [benchmarkRetryKey, setBenchmarkRetryKey] = useState(0);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
+  const [selectedMovementDay, setSelectedMovementDay] = useState<number | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
   const { annotations, addAnnotation, updateAnnotation, removeAnnotation } =
     useChartAnnotations(CHART_ID);
@@ -322,6 +324,16 @@ export function PortfolioPerformanceBenchmarkChart({
 
   const selectedPoint =
     selectedPointIndex !== null ? chartData.portfolioPts[selectedPointIndex] ?? null : null;
+
+  // Handle selection from LargestDailyMovements component
+  const handleSelectMovement = useCallback(
+    (_movement: import("@/lib/dailyMovements").DailyMovement, pointIndex: number) => {
+      setSelectedPointIndex(pointIndex);
+      setSelectedMovementDay(portfolioPoints[pointIndex]?.timestamp ?? null);
+      tooltip.showAt(pointIndex);
+    },
+    [portfolioPoints, tooltip]
+  );
 
   const rangeStartDay = portfolioPoints.length > 0 ? toDayKey(portfolioPoints[0].timestamp) : 0;
   const rangeEndDay =
@@ -816,6 +828,17 @@ export function PortfolioPerformanceBenchmarkChart({
             onCancel={() => setEditor(null)}
           />
         )}
+
+        {/* Largest Daily Movements */}
+        <LargestDailyMovements
+          portfolioHistory={portfolioPoints}
+          chartPortfolioPts={chartData.portfolioPts}
+          chartWidth={chartData.width ?? 0}
+          chartHeight={chartData.height ?? 0}
+          onSelectMovement={handleSelectMovement}
+          selectedDay={selectedMovementDay}
+          className="mt-3"
+        />
 
         <AnnotationList
           annotations={annotations.filter((a) => a.metric === PORTFOLIO_METRIC)}
