@@ -44,6 +44,12 @@ import {
   triggerDownload,
 } from "@/lib/taxUtils";
 import { TaxReviewQueue } from "@/components/TaxReviewQueue";
+import { TaxYearDataNotice } from "@/components/TaxYearDataNotice";
+import { TaxFormatPreview } from "@/components/TaxFormatPreview";
+import { TaxReconciliation } from "@/components/TaxReconciliation";
+import { TaxCategorySummary } from "@/components/TaxCategorySummary";
+import { summarizeYearData, yearOptionLabel } from "@/lib/taxYearData";
+import { DEFAULT_TAX_FORMAT, generateFormattedGenericCsv, type TaxFormatOptions } from "@/lib/taxFormatting";
 import { TaxConversionRateDetails } from "@/components/TaxConversionRateDetails";
 import { TaxLineItemSources } from "@/components/TaxLineItemSources";
 import { conversionSummaryText, summarizeConversions } from "@/lib/taxConversionDetails";
@@ -233,6 +239,7 @@ export function TaxReportingTool() {
     CURRENT_YEAR - 2,
   ]);
   const [csvPreset, setCsvPreset] = useState<CsvPreset>("generic");
+  const [formatOptions, setFormatOptions] = useState<TaxFormatOptions>(DEFAULT_TAX_FORMAT);
   const [pendingExport, setPendingExport] = useState<ExportKind | null>(null);
   const [exportState, setExportState] = useState<ExportState>("idle");
   const [lastExport, setLastExport] = useState<ExportKind | null>(null);
@@ -273,6 +280,9 @@ export function TaxReportingTool() {
     () => new Map(transactions.map((tx) => [tx.id, tx])),
     [transactions]
   );
+
+  // Which tax years have any transaction data at all (#1134).
+  const yearSummaries = useMemo(() => summarizeYearData(transactions, AVAILABLE_YEARS), [transactions]);
 
   const yearTransactions = useMemo(
     () =>
@@ -444,7 +454,10 @@ export function TaxReportingTool() {
 
   function runExport(kind: ExportKind) {
     if (kind === "csv") {
-      const csv = exportToCsvWithPreset(currentReport, csvPreset);
+      const csv =
+        csvPreset === "generic"
+          ? generateFormattedGenericCsv(currentReport, formatOptions)
+          : exportToCsvWithPreset(currentReport, csvPreset);
       triggerDownload(
         csv,
         `tax-report-${selectedYear}-${jurisdiction}-${csvPreset}.csv`,
@@ -607,9 +620,9 @@ export function TaxReportingTool() {
                 className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 aria-label="Select tax year"
               >
-                {AVAILABLE_YEARS.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
+                {yearSummaries.map((summary) => (
+                  <option key={summary.year} value={summary.year}>
+                    {yearOptionLabel(summary)}
                   </option>
                 ))}
               </select>
@@ -734,6 +747,8 @@ export function TaxReportingTool() {
       {/* ── SINGLE-YEAR SUMMARY CARDS ──────────────────────────────────────── */}
       {!multiYearMode && (
         <>
+          <TaxYearDataNotice year={selectedYear} count={yearTransactions.length} />
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <SummaryCard
               label="Net Gain/Loss"
@@ -832,6 +847,12 @@ export function TaxReportingTool() {
             </Card>
           )}
 
+          <TaxCategorySummary
+            report={currentReport}
+            transactionsById={transactionsById}
+            assignments={categoryAssignments}
+          />
+
           <TaxReviewQueue
             transactions={yearTransactions}
             assignments={categoryAssignments}
@@ -839,6 +860,8 @@ export function TaxReportingTool() {
               setCategoryAssignments((prev) => assignCategory(prev, id, assignment))
             }
           />
+
+          <TaxReconciliation transactions={transactions} />
 
           {/* Trade-level breakdown */}
           <Card>
@@ -993,6 +1016,12 @@ export function TaxReportingTool() {
                     ))}
                   </select>
                 </div>
+                <TaxFormatPreview
+                  report={currentReport}
+                  preset={csvPreset}
+                  options={formatOptions}
+                  onChange={setFormatOptions}
+                />
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
