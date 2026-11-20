@@ -4,11 +4,17 @@ import { TransactionActivityFeed } from "@/components/TransactionActivityFeed";
 import { JournalEntryForm } from "@/components/JournalEntryForm";
 import { CSVImportModal } from "@/components/CSVImportModal";
 import { JournalTagSummary } from "@/components/JournalTagSummary";
+import { JournalPrivacyToggle } from "@/components/JournalPrivacyToggle";
+import { PrivateValue } from "@/components/PrivateValue";
+import { JournalRevisionTracker } from "@/components/JournalRevisionTracker";
+import { JournalReminderScheduler } from "@/components/JournalReminderScheduler";
 import { BookMarked, TrendingUp, History } from "lucide-react";
 
 export function JournalPage() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      <JournalRevisionTracker />
+      <JournalReminderScheduler />
       {/* Header section with cumulative stats and primary actions */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -28,6 +34,7 @@ export function JournalPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <JournalPrivacyToggle />
           <CSVImportModal />
           <JournalEntryForm />
         </div>
@@ -63,7 +70,9 @@ export function JournalPage() {
               Total Profit
             </span>
           </div>
-          <p className="text-2xl font-bold text-blue-300">+$2.4k</p>
+          <p className="text-2xl font-bold text-blue-300">
+            <PrivateValue>+$2.4k</PrivateValue>
+          </p>
           <p className="text-xs text-blue-400/60 mt-1">0.52% avg / trade</p>
         </div>
       </div>

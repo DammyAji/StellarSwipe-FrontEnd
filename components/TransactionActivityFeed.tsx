@@ -10,6 +10,7 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
+  Download,
 } from "lucide-react";
 import { useTransactionStore } from "@/store/useTransactionStore";
 import {
@@ -35,6 +36,12 @@ import { VirtualizedList } from "@/components/VirtualizedList";
 import { useVirtualActivityList } from "@/hooks/useVirtualActivityList";
 import { toast } from "@/lib/toast";
 import type { TransactionHistoryItem } from "@/store/useTransactionStore";
+import { PrivateValue } from "@/components/PrivateValue";
+import { JournalReminderChip } from "@/components/JournalReminderChip";
+import { JournalReminderDialog } from "@/components/JournalReminderDialog";
+import { JournalRevisionCompare } from "@/components/JournalRevisionCompare";
+import { generateJournalExport } from "@/lib/journalExport";
+import { triggerDownload } from "@/lib/taxUtils";
 
 const TYPE_OPTIONS = [
   { label: "All", value: "ALL" },
@@ -187,6 +194,8 @@ export function TransactionActivityFeed() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [reminderId, setReminderId] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [incompleteOnly, setIncompleteOnly] = useState(false);
   const requirements = useJournalCompletenessStore((state) => state.requirements);
@@ -483,6 +492,32 @@ export function TransactionActivityFeed() {
     );
   }, []);
 
+  // Exports exactly the selected entries; an empty selection or a generation
+  // failure is reported instead of downloading anything.
+  const handleExportSelected = useCallback(() => {
+    const selected = history.filter((item) => selectedIds.includes(item.id));
+    const result = generateJournalExport(selected);
+    if (!result.ok) {
+      toast.error(
+        result.reason === "empty-selection" ? "Nothing selected to export" : "Export failed",
+        { description: result.message, duration: 4000 }
+      );
+      return;
+    }
+    try {
+      triggerDownload(result.json, result.filename, "application/json");
+      toast.success(`Exported ${result.count} ${result.count === 1 ? "entry" : "entries"}`, {
+        description: result.filename,
+        duration: 3000,
+      });
+    } catch (err) {
+      toast.error("Export failed", {
+        description: err instanceof Error ? err.message : "The file could not be downloaded.",
+        duration: 4000,
+      });
+    }
+  }, [history, selectedIds]);
+
   // Clears only the tag selection so type, status and sort stay as they are.
   const clearTagFilters = useCallback(() => setTagFilters([]), []);
 
@@ -590,7 +625,7 @@ export function TransactionActivityFeed() {
                   Amount
                 </p>
                 <p className="text-sm font-medium text-foreground">
-                  {item.amount} {item.token}
+                  <PrivateValue text="••••">{`${item.amount} ${item.token}`}</PrivateValue>
                 </p>
               </div>
               <div>
@@ -598,7 +633,7 @@ export function TransactionActivityFeed() {
                   Price
                 </p>
                 <p className="text-sm font-medium text-foreground">
-                  ${item.price}
+                  <PrivateValue text="••••">{`$${item.price}`}</PrivateValue>
                 </p>
               </div>
               <div>
@@ -621,6 +656,17 @@ export function TransactionActivityFeed() {
                   Edit
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => setHistoryId(item.id)}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-foreground transition hover:border-white/20 hover:bg-white/10"
+                aria-label={`Compare revisions of ${item.assetPair} entry`}
+              >
+                History
+              </button>
+
+              <JournalReminderChip entryId={item.id} assetPair={item.assetPair} onOpen={setReminderId} />
 
               <button
                 onClick={() => handleDelete(item)}
@@ -949,6 +995,14 @@ export function TransactionActivityFeed() {
             )}
             {showArchived ? "Restore selected" : "Archive selected"}
           </button>
+          <button
+            type="button"
+            onClick={handleExportSelected}
+            className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-foreground transition hover:border-white/20 hover:bg-white/10"
+          >
+            <Download size={12} aria-hidden="true" />
+            Export selected (JSON)
+          </button>
         </div>
       </div>
 
@@ -1032,6 +1086,15 @@ export function TransactionActivityFeed() {
           />
         </>
       )}
+
+      <JournalRevisionCompare
+        entry={historyId ? history.find((item) => item.id === historyId) ?? null : null}
+        onClose={() => setHistoryId(null)}
+      />
+      <JournalReminderDialog
+        entry={reminderId ? history.find((item) => item.id === reminderId) ?? null : null}
+        onClose={() => setReminderId(null)}
+      />
 
       {/* ── Archive confirmation ────────────────────────────────────────── */}
       <Dialog

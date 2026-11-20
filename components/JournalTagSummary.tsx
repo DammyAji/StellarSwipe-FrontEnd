@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useTransactionStore } from "@/store/useTransactionStore";
 import { summarizeByTag, UNTAGGED } from "@/lib/journalTagSummary";
 import { cn } from "@/lib/utils";
+import { PrivateValue } from "@/components/PrivateValue";
 
 const PERIOD_OPTIONS = [
   { label: "7 days", value: "7", days: 7 },
@@ -90,8 +91,7 @@ export function JournalTagSummary() {
                     <span className="text-slate-500">N/A</span>
                   ) : (
                     <span className={row.pnl >= 0 ? "text-emerald-400" : "text-red-400"}>
-                      {row.pnl >= 0 ? "+" : ""}
-                      {row.pnl.toFixed(2)}
+                      <PrivateValue text="••••">{`${row.pnl >= 0 ? "+" : ""}${row.pnl.toFixed(2)}`}</PrivateValue>
                     </span>
                   )}
                   {row.missingPnl > 0 && row.pnl !== null && (
