@@ -26,6 +26,10 @@ export interface TaxableTransaction {
   acquisitionDate?: number;
   foreignCurrency?: string;
   conversionRate?: number;
+  /** Where the conversion rate came from (an exchange or oracle name), when known. */
+  conversionRateSource?: string;
+  /** When the rate was looked up (epoch ms), when known. Distinct from the transaction time. */
+  conversionRateLookupTimestamp?: number;
   /** Origin details used to identify the record during review (#894). */
   source?: TaxTransactionSource;
 }
@@ -49,6 +53,8 @@ export interface TaxEntry {
   date: Date;
   foreignCurrency?: string;
   conversionRate?: number;
+  conversionRateSource?: string;
+  conversionRateLookupTimestamp?: number;
 }
 
 export interface TaxReport {
@@ -119,6 +125,8 @@ export function computeTaxReport(
       date: new Date(tx.timestamp),
       foreignCurrency: tx.foreignCurrency,
       conversionRate: tx.conversionRate,
+      conversionRateSource: tx.conversionRateSource,
+      conversionRateLookupTimestamp: tx.conversionRateLookupTimestamp,
     };
   });
 

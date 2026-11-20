@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import Link from "next/link"
 import { useBacktestHistoryStore } from "@/store/useBacktestHistoryStore"
 import { Button } from "@/components/ui/button"
+import { BacktestNoTradesExplainer } from "@/components/BacktestNoTradesExplainer"
 import { BacktestConfigSnapshot } from "@/components/BacktestConfigSnapshot"
 import { BacktestBaselineCard } from "@/components/BacktestBaselineCard"
 import { BacktestDrawdownInspector } from "@/components/BacktestDrawdownInspector"
@@ -127,7 +128,10 @@ export default function BacktestRunDetailPage() {
       </div>
 
       {sortedTrades.length === 0 ? (
-        <p className="text-sm text-gray-400">No simulated trades for this run.</p>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-400">No simulated trades for this run.</p>
+          <BacktestNoTradesExplainer params={run.params} result={run.result} inputsHref="/backtest-sim" />
+        </div>
       ) : (
         <>
           <div className="overflow-x-auto">

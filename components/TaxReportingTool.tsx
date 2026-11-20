@@ -44,6 +44,9 @@ import {
   triggerDownload,
 } from "@/lib/taxUtils";
 import { TaxReviewQueue } from "@/components/TaxReviewQueue";
+import { TaxConversionRateDetails } from "@/components/TaxConversionRateDetails";
+import { TaxLineItemSources } from "@/components/TaxLineItemSources";
+import { conversionSummaryText, summarizeConversions } from "@/lib/taxConversionDetails";
 import {
   TAX_CATEGORY_LABELS,
   assignCategory,
@@ -347,6 +350,10 @@ export function TaxReportingTool() {
         {
           label: "Filename",
           value: `tax-report-${selectedYear}-${jurisdiction}-${csvPreset}.csv`,
+        },
+        {
+          label: "Conversion rates",
+          value: conversionSummaryText(summarizeConversions(currentReport.entries)),
         },
       ],
     },
@@ -948,6 +955,9 @@ export function TaxReportingTool() {
               )}
             </CardContent>
           </Card>
+
+          <TaxConversionRateDetails entries={currentReport.entries} />
+          <TaxLineItemSources entries={currentReport.entries} transactionsById={transactionsById} />
 
           {/* Export section */}
           <Card>

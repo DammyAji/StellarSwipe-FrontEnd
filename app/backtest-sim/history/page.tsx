@@ -1,9 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useBacktestHistoryStore } from "@/store/useBacktestHistoryStore"
 import { Button } from "@/components/ui/button"
+import { BacktestFavoriteButton } from "@/components/BacktestFavoriteButton"
+import { filterRunsByFavorite } from "@/lib/backtestFavorites"
+import { useBacktestFavoritesStore } from "@/store/useBacktestFavoritesStore"
 import { BacktestFailedRuns } from "@/components/BacktestFailedRuns"
 
 const METRICS = [
@@ -162,6 +165,17 @@ export default function BacktestHistoryPage() {
 
   const selectedRuns = runs.filter((run) => selectedIds.includes(run.id))
 
+  const favoriteIds = useBacktestFavoritesStore((s) => s.favoriteIds)
+  const pruneFavorites = useBacktestFavoritesStore((s) => s.prune)
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const visibleRuns = filterRunsByFavorite(runs, favoriteIds, favoritesOnly)
+  const favoriteCount = runs.filter((run) => favoriteIds.includes(run.id)).length
+
+  // Forget favorites whose runs were removed from the history.
+  useEffect(() => {
+    pruneFavorites(runs.map((run) => run.id))
+  }, [runs, pruneFavorites])
+
   return (
     <div className="p-6">
       <BacktestFailedRuns />
@@ -179,11 +193,29 @@ export default function BacktestHistoryPage() {
         </div>
       </div>
 
+      {runs.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <Button
+            variant={favoritesOnly ? "default" : "outline"}
+            size="sm"
+            aria-pressed={favoritesOnly}
+            onClick={() => setFavoritesOnly((prev) => !prev)}
+            data-testid="history-favorites-filter"
+          >
+            Favorites only ({favoriteCount})
+          </Button>
+        </div>
+      )}
+
       {runs.length === 0 ? (
         <p className="text-gray-400">No backtest runs yet. Run a simulation to see history here.</p>
+      ) : visibleRuns.length === 0 ? (
+        <p className="text-gray-400" role="status">
+          No favorite runs yet. Use the star on a run to add it here.
+        </p>
       ) : (
         <div className="space-y-2">
-          {runs.map((run) => {
+          {visibleRuns.map((run) => {
             const assumptions = run.assumptions
             const isSelected = selectedIds.includes(run.id)
             const ledgerOpen = openLedgerIds.includes(run.id)
@@ -206,6 +238,7 @@ export default function BacktestHistoryPage() {
                       aria-label={`Select run ${run.params.from} to ${run.params.to} for comparison`}
                       data-testid={`history-run-select-${run.id}`}
                     />
+                    <BacktestFavoriteButton runId={run.id} runLabel={`${run.params.from} to ${run.params.to}`} />
                     <Link
                       href={`/backtest-sim/history/${run.id}`}
                       className="block min-w-0"
