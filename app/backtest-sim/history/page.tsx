@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useBacktestHistoryStore } from "@/store/useBacktestHistoryStore"
 import { Button } from "@/components/ui/button"
+import { BacktestFailedRuns } from "@/components/BacktestFailedRuns"
 
 const METRICS = [
   {
@@ -163,6 +164,7 @@ export default function BacktestHistoryPage() {
 
   return (
     <div className="p-6">
+      <BacktestFailedRuns />
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Backtest Run History</h1>
         <div className="flex gap-2">
