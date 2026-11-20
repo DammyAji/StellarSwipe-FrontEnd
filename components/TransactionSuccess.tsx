@@ -9,6 +9,7 @@ import { useTransactionStore } from "@/store/useTransactionStore";
 import { getExplorerTxUrl, normalizeNetwork } from "@/lib/stellar/explorer";
 import { showNotification } from "@/lib/notifications";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
+import { JournalFromTransactionButton } from "@/components/JournalFromTransactionButton";
 import analyticsService from "@/services/analytics";
 
 const AUTO_DISMISS_MS = 8000;
@@ -210,6 +211,11 @@ export function TransactionSuccess() {
                 Continue Swiping
                 <ArrowRight className="h-4 w-4" />
               </Button>
+              <JournalFromTransactionButton
+                transaction={success}
+                onStarted={clearSuccess}
+                className="flex-1 gap-2"
+              />
             </motion.div>
           </motion.div>
         </motion.div>

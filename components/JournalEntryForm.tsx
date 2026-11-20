@@ -12,6 +12,9 @@ import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useKeyboardInset, useKeepFocusedFieldVisible } from "@/hooks/useKeyboardInset";
+import { JournalTagPicker } from "@/components/JournalTagPicker";
+import { useJournalDraftStore } from "@/store/useJournalDraftStore";
+import { findJournalEntryByHash } from "@/lib/journalFromTransaction";
 
 type AutosaveStatus = "idle" | "saving" | "saved" | "offline" | "failed";
 
@@ -95,10 +98,17 @@ export function JournalEntryForm({
     type: (editEntry?.type as JournalEntry["type"]) || "MANUAL",
     status: (editEntry?.status as JournalEntry["status"]) || "SUCCEEDED",
     outcome: (editEntry?.outcome as JournalEntry["outcome"]) || "PENDING",
-    notes: "",
+    notes: editEntry?.notes ?? "",
     tags: editEntry?.tags ?? [],
   });
   const [tagInput, setTagInput] = useState("");
+
+  // Transaction this draft was started from (#1118). Kept in a ref for the
+  // submit callbacks and mirrored in state for the banner.
+  const linkedRef = useRef<{ hash: string | null; network: TransactionHistoryItem["network"] | null } | null>(null);
+  const [linkedInfo, setLinkedInfo] = useState<{ context: Array<{ label: string; value: string }>; missing: string[] } | null>(null);
+  const pendingDraft = useJournalDraftStore((s) => s.pending);
+  const consumeDraft = useJournalDraftStore((s) => s.consume);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -224,7 +234,21 @@ export function JournalEntryForm({
     setRecoverableDraft(null);
   }, [draftKey]);
 
+  // Take over a draft started from a transaction. Only the page's own editor
+  // does this, never the inline edit forms.
+  useEffect(() => {
+    if (isEditing || !pendingDraft) return;
+    linkedRef.current = { hash: pendingDraft.linkedHash, network: pendingDraft.linkedNetwork };
+    setLinkedInfo({ context: pendingDraft.context, missing: pendingDraft.missing });
+    setFormData((prev) => ({ ...prev, ...pendingDraft.draft }));
+    setIsOpen(true);
+    setIsDirty(true);
+    consumeDraft();
+  }, [isEditing, pendingDraft, consumeDraft]);
+
   const resetForm = useCallback(() => {
+    linkedRef.current = null;
+    setLinkedInfo(null);
     setFormData({
       date: new Date().toISOString().split("T")[0],
       type: "MANUAL",
@@ -357,9 +381,19 @@ export function JournalEntryForm({
     async (data: JournalEntry) => {
       const tempId = `tx-optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
+      const linked = linkedRef.current;
+      if (linked?.hash && findJournalEntryByHash(store.getState().history, linked.hash)) {
+        const message = "This transaction already has a journal entry.";
+        setSubmitError(message);
+        toast.info("Already in your journal", { description: message, duration: 3000 });
+        return;
+      }
+
       const optimisticEntry: TransactionHistoryItem = {
         id: tempId,
-        hash: `manual-${Date.now().toString(16)}`,
+        hash: linked?.hash ?? `manual-${Date.now().toString(16)}`,
+        network: linked?.network ?? undefined,
+        notes: data.notes?.trim() || undefined,
         assetPair: data.assetPair,
         amount: data.amount,
         price: data.price,
@@ -382,6 +416,8 @@ export function JournalEntryForm({
         store.getState().addTransaction(serverEntry);
         store.getState().clearPending(tempId);
         clearDraft(draftKey);
+        linkedRef.current = null;
+        setLinkedInfo(null);
         toast.success("Transaction added to journal", {
           description: `${data.assetPair} — ${data.amount} ${data.token}`,
           duration: 2500,
@@ -427,6 +463,7 @@ export function JournalEntryForm({
         status: data.status as TransactionHistoryItem["status"],
         outcome: data.outcome as TransactionHistoryItem["outcome"],
         tags: data.tags ?? [],
+        notes: data.notes?.trim() ?? "",
       };
 
       const snapshot = { ...entry };
@@ -596,6 +633,27 @@ export function JournalEntryForm({
           <Button type="button" variant="ghost" size="sm" onClick={discardDraft}>
             Discard
           </Button>
+        </div>
+      )}
+
+      {linkedInfo && (
+        <div
+          className="mb-4 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-200"
+          role="region"
+          aria-label="Draft from transaction"
+          data-testid="journal-linked-draft"
+        >
+          <p className="font-medium">Started from an executed transaction</p>
+          {linkedInfo.context.length > 0 && (
+            <p className="mt-1 text-xs text-blue-300/80">
+              {linkedInfo.context.map((c) => `${c.label}: ${c.value}`).join(" · ")}
+            </p>
+          )}
+          {linkedInfo.missing.length > 0 && (
+            <p className="mt-1 text-xs text-blue-300/80">
+              Not provided by the transaction, please fill in: {linkedInfo.missing.join(", ")}.
+            </p>
+          )}
         </div>
       )}
 
@@ -788,6 +846,33 @@ export function JournalEntryForm({
               disabled={isSubmitting}
             />
           </div>
+          <JournalTagPicker
+            selected={formData.tags ?? []}
+            disabled={isSubmitting}
+            onToggle={(tag) => {
+              markDirty();
+              setFormData((prev) => {
+                const current = prev.tags ?? [];
+                return {
+                  ...prev,
+                  tags: current.includes(tag) ? current.filter((t) => t !== tag) : normalizeJournalTags([...current, tag]),
+                };
+              });
+            }}
+          />
+        </div>
+
+        <div className="space-y-1 sm:col-span-2">
+          <label htmlFor="journal-entry-notes" className="text-xs font-medium text-slate-400">Notes</label>
+          <textarea
+            id="journal-entry-notes"
+            rows={3}
+            value={formData.notes ?? ""}
+            onChange={(e) => updateField("notes", e.target.value)}
+            placeholder="Your own notes about this trade"
+            className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={isSubmitting}
+          />
         </div>
 
         <div className="sm:col-span-2 hidden sm:block">
