@@ -227,7 +227,6 @@ function AnalyticsPageInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // Period-over-period comparison state (#405)
-  const [showPeriodComparison, setShowPeriodComparison] = useState(false);
   const [granularity, setGranularity] = useState<ComparisonGranularity>("month");
   const [customRange, setCustomRange] = useState<DateRange>(() => {
     const end = new Date();
@@ -235,6 +234,17 @@ function AnalyticsPageInner() {
     start.setDate(start.getDate() - 30);
     return { start, end };
   });
+
+  // Get period comparison data from portfolio
+  const {
+    pnl,
+    winRate,
+    totalTrades,
+    priorPnl,
+    priorWinRate,
+    priorTotalTrades,
+    isDemo,
+  } = usePeriodComparison();
 
   // Per-wallet allocation breakdown state (#866)
   const [allocationView, setAllocationView] = useState<AllocationViewMode>("aggregate");
@@ -277,15 +287,13 @@ function AnalyticsPageInner() {
   const currentSnapshot = useMemo<AnalyticsViewSnapshot>(() => ({
     rangeStart: customRange.start.toISOString(),
     rangeEnd: customRange.end.toISOString(),
-    showPeriodComparison,
     granularity,
-  }), [customRange, showPeriodComparison, granularity]);
+  }), [customRange, granularity]);
 
   /** Apply a saved view: hydrate local state from the snapshot. */
   const handleApplyView = useCallback((snapshot: AnalyticsViewSnapshot) => {
     const range = snapshotToDateRange(snapshot);
     setCustomRange(range);
-    setShowPeriodComparison(snapshot.showPeriodComparison);
     setGranularity(snapshot.granularity);
     router.replace(`${pathname}${serializeAnalyticsRange(range)}`, { scroll: false });
   }, [pathname, router]);
@@ -386,13 +394,22 @@ function AnalyticsPageInner() {
         )}
       </section>
 
+      {/* Period-over-period comparison statistics below the chart */}
+      <PeriodComparisonWidget
+        pnl={pnl}
+        winRate={winRate}
+        totalTrades={totalTrades}
+        priorPnl={priorPnl}
+        priorWinRate={priorWinRate}
+        priorTotalTrades={priorTotalTrades}
+        granularity={granularity}
+        onGranularityChange={setGranularity}
+        isDemo={isDemo}
+      />
+
       <PnLWidget />
 
       <PerformanceDashboard />
-
-      {showPeriodComparison && (
-        <PeriodComparisonWidget granularity={granularity} />
-      )}
     </div>
   );
 }
