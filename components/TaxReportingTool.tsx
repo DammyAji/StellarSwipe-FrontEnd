@@ -227,6 +227,16 @@ function MultiYearComparisonTable({
 type ExportKind = "csv" | "pdf" | "turbotax" | "taxact" | "multi-csv";
 type ExportState = "idle" | "generating" | "ready" | "failed";
 
+/** Options captured when the export review opens (#1056). */
+interface ReviewOptions {
+  kind: ExportKind;
+  jurisdiction: TaxJurisdiction;
+  selectedYear: number;
+  selectedYears: number[];
+  csvPreset: CsvPreset;
+  formatOptions: TaxFormatOptions;
+}
+
 export function TaxReportingTool() {
   const { history } = useTransactionStore();
   const [jurisdiction, setJurisdiction] = useState<TaxJurisdiction>("US");
@@ -241,6 +251,9 @@ export function TaxReportingTool() {
   const [csvPreset, setCsvPreset] = useState<CsvPreset>("generic");
   const [formatOptions, setFormatOptions] = useState<TaxFormatOptions>(DEFAULT_TAX_FORMAT);
   const [pendingExport, setPendingExport] = useState<ExportKind | null>(null);
+  // #1056 Options are snapshotted when the review opens so the summary always
+  // matches the file that gets generated, even if the form changes underneath.
+  const [reviewOptions, setReviewOptions] = useState<ReviewOptions | null>(null);
   const [exportState, setExportState] = useState<ExportState>("idle");
   const [lastExport, setLastExport] = useState<ExportKind | null>(null);
   // PDF preview (#781): options are kept here so they survive closing the
@@ -295,17 +308,65 @@ export function TaxReportingTool() {
   // #893 Validate the export the user is previewing.
   const exportValidation = useMemo(
     () =>
-      pendingExport
+      reviewOptions
         ? validateTaxExport({
             transactions,
-            years: pendingExport === "multi-csv" ? selectedYears : [selectedYear],
-            jurisdiction,
-            format: pendingExport,
+            years:
+              reviewOptions.kind === "multi-csv"
+                ? reviewOptions.selectedYears
+                : [reviewOptions.selectedYear],
+            jurisdiction: reviewOptions.jurisdiction,
+            format: reviewOptions.kind,
             assignments: categoryAssignments,
           })
         : null,
-    [pendingExport, transactions, selectedYears, selectedYear, jurisdiction, categoryAssignments]
+    [reviewOptions, transactions, categoryAssignments]
   );
+
+  // #1056 Report computed from the reviewed options, so the summary and the
+  // generated file always agree.
+  const reviewReport = useMemo(
+    () =>
+      reviewOptions
+        ? computeTaxReport(
+            transactions,
+            reviewOptions.selectedYear,
+            reviewOptions.jurisdiction
+          )
+        : null,
+    [reviewOptions, transactions]
+  );
+
+  const reviewMultiYearRows = useMemo(
+    () =>
+      reviewOptions?.kind === "multi-csv"
+        ? computeMultiYearSummary(
+            transactions,
+            [...reviewOptions.selectedYears].sort((a, b) => b - a),
+            reviewOptions.jurisdiction
+          )
+        : [],
+    [reviewOptions, transactions]
+  );
+
+  /** Opens the review step with a snapshot of the current options. */
+  function openReview(kind: ExportKind) {
+    setReviewOptions({
+      kind,
+      jurisdiction,
+      selectedYear,
+      selectedYears: [...selectedYears],
+      csvPreset,
+      formatOptions: { ...formatOptions },
+    });
+    setPendingExport(kind);
+  }
+
+  /** Closes the review so the user can change options; selections are kept. */
+  function editOptions() {
+    setPendingExport(null);
+    setTimeout(() => document.getElementById("jurisdiction-select")?.focus(), 0);
+  }
 
   const rates = TAX_RATES[jurisdiction];
   const netGainLoss = currentReport.totalGainLoss;

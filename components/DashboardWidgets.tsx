@@ -244,9 +244,10 @@ export function DashboardWidgets() {
 
   const announcePosition = useCallback((widgetId: DashboardWidgetId, list: DashboardWidgetId[]) => {
     const title = WIDGET_META[widgetId]?.title ?? widgetId;
-    setAnnouncement(
-      `${title} moved to position ${list.indexOf(widgetId) + 1} of ${list.length}.`
-    );
+    const message = `${title} moved to position ${list.indexOf(widgetId) + 1} of ${list.length}.`;
+    // Toggle a trailing space so repeating the same message re-triggers the
+    // live region instead of being silently ignored by screen readers.
+    setAnnouncement((prev) => (prev === message ? `${message}\u00a0` : message));
   }, []);
 
   useEffect(() => {
@@ -310,17 +311,31 @@ export function DashboardWidgets() {
     [announcePosition]
   );
 
+  /**
+   * Single reorder path shared by pointer dragging, the ↑/↓ buttons and the
+   * keyboard shortcuts, so the persisted order can never diverge between them.
+   * Reads the latest order from a ref so rapid key presses never act on a
+   * stale index.
+   */
   const moveItem = useCallback(
-    (index: number, direction: "up" | "down") => {
-      const newIndex = direction === "up" ? index - 1 : index + 1;
-      if (newIndex < 0 || newIndex >= order.length) return;
-      const newOrder = [...order];
+    (index: number, direction: "up" | "down" | "first" | "last") => {
+      const current = orderRef.current;
+      const newIndex =
+        direction === "up"
+          ? index - 1
+          : direction === "down"
+            ? index + 1
+            : direction === "first"
+              ? 0
+              : current.length - 1;
+      if (newIndex < 0 || newIndex >= current.length || newIndex === index) return;
+      const newOrder = [...current];
       const [moved] = newOrder.splice(index, 1);
       newOrder.splice(newIndex, 0, moved);
       handleReorder(newOrder);
       announcePosition(moved, newOrder);
     },
-    [order, handleReorder, announcePosition]
+    [handleReorder, announcePosition]
   );
 
   // Only render widgets that are both in drag-order and in the store's visible list.
@@ -350,6 +365,9 @@ export function DashboardWidgets() {
           Dashboard Widgets
         </span>
         <div className="flex items-center gap-2">
+          <span className="hidden text-[11px] text-foreground-subtle sm:inline">
+            Reorder: focus a widget handle, then ↑ / ↓ (Home / End for first / last)
+          </span>
           {/* #756 — Quick-add widget action */}
           <DashboardQuickAdd />
           <button
@@ -417,7 +435,7 @@ interface WidgetWrapperProps {
   widgetTitle: string;
   index: number;
   totalItems: number;
-  onMove: (index: number, direction: "up" | "down") => void;
+  onMove: (index: number, direction: "up" | "down" | "first" | "last") => void;
   onDragStart: (widgetTitle: string) => void;
   onDragEnd: (widgetId: string, widgetTitle: string) => void;
   lastUpdated: Date | null;
@@ -484,12 +502,19 @@ function WidgetWrapper({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === "ArrowUp") {
       e.preventDefault();
       onMove(index, "up");
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       onMove(index, "down");
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      onMove(index, "first");
+    } else if (e.key === "End") {
+      e.preventDefault();
+      onMove(index, "last");
     }
   };
 
@@ -536,8 +561,9 @@ function WidgetWrapper({
               onPointerCancel={clearHold}
               onKeyDown={handleKeyDown}
               onContextMenu={(e) => e.preventDefault()}
-              aria-label={`Drag handle for ${widgetTitle}, position ${index + 1} of ${totalItems}. Press and hold to drag, or use Arrow Up and Arrow Down to reorder.`}
-              title="Drag to reorder (press and hold on touch)"
+              aria-label={`Drag handle for ${widgetTitle}, position ${index + 1} of ${totalItems}. Press and hold to drag, or use Arrow Up and Arrow Down to reorder, Home and End to move to the first or last position.`}
+              aria-keyshortcuts="ArrowUp ArrowDown Home End"
+              title="Drag to reorder (press and hold on touch). Keyboard: ↑ / ↓ to move, Home / End for first / last."
               // touch-action: none only on the handle — the rest of the widget
               // keeps native scrolling and its own controls stay usable.
               style={{ touchAction: "none", WebkitTouchCallout: "none" }}

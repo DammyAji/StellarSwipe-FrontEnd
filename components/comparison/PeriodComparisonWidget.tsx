@@ -40,6 +40,13 @@ interface PeriodComparisonWidgetProps {
   
   /** Demo mode indicator - shows badge when true */
   isDemo?: boolean;
+
+  /** Data request in flight — renders a loading state instead of metrics */
+  isLoading?: boolean;
+  /** Data request failed — renders an error state instead of metrics */
+  error?: unknown;
+  /** Retry handler for the error state */
+  onRetry?: () => void;
   
   className?: string;
 }
@@ -67,6 +74,9 @@ export function PeriodComparisonWidget({
   granularity: controlledGranularity,
   onGranularityChange,
   isDemo = false,
+  isLoading = false,
+  error,
+  onRetry,
   className,
 }: PeriodComparisonWidgetProps) {
   const [internalGranularity, setInternalGranularity] = React.useState<ComparisonGranularity>("month");
@@ -114,6 +124,49 @@ export function PeriodComparisonWidget({
     tradesComparison.metadata.hasNoPriorData;
 
   const currentPeriodRange = pnlComparison.currentPeriod.range;
+
+  // Loading and error are distinct from "no data" (#1055)
+  if (isLoading || error) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <h3 className="font-semibold text-foreground">Period Comparison</h3>
+        </CardHeader>
+        <CardContent>
+          <AnalyticsPanelStateView
+            state={error ? "error" : "loading"}
+            onRetry={onRetry}
+            loadingLabel="Loading period comparison…"
+            title="Period comparison"
+            requiredData=""
+            actionLabel=""
+            actionHref=""
+          >
+            {null}
+          </AnalyticsPanelStateView>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // No real activity in the current period: guide instead of showing metrics
+  if (totalTrades === 0) {
+    return (
+      <Card className={className}>
+        <CardHeader>
+          <h3 className="font-semibold text-foreground">Period Comparison</h3>
+        </CardHeader>
+        <CardContent>
+          <AnalyticsEmptyState
+            title="No trades in this period"
+            requiredData="Period comparison needs at least one executed trade in the selected period."
+            actionLabel="Browse signals"
+            actionHref="/app"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className={className}>
