@@ -18,6 +18,7 @@ import { useNotificationPreference } from "@/hooks/useNotificationPreference";
 import { SettingsBreadcrumb } from "@/components/SettingsBreadcrumb";
 import { AccountDeletionDialog } from "@/components/AccountDeletionDialog";
 import { useWalletStore } from "@/store/useWalletStore";
+import { WalletDetailsPanel } from "@/components/WalletDetailsPanel";
 
 export default function SecuritySettingsPage() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
@@ -50,6 +51,9 @@ export default function SecuritySettingsPage() {
             Account Security
           </h1>
         </div>
+
+        {/* Wallet details (#1079) */}
+        <WalletDetailsPanel />
 
         {/* 2FA status card */}
         {!showSetup && (
