@@ -15,6 +15,51 @@ export const TAX_RATES: Record<TaxJurisdiction, TaxRate> = {
 
 export const LONG_TERM_THRESHOLD_DAYS = 365;
 
+/**
+ * Timezone used to interpret tax-year boundaries (#1060). Tax years are
+ * calendar years in the reporting timezone, not in the user's local timezone,
+ * so review, report and exports all agree on which year a trade falls in.
+ */
+export const TAX_REPORTING_TIME_ZONE = "UTC";
+
+/** Calendar year of an instant in the reporting timezone. */
+export function taxYearOf(
+  timestamp: number,
+  timeZone: string = TAX_REPORTING_TIME_ZONE
+): number {
+  return Number(
+    new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric" }).format(
+      new Date(timestamp)
+    )
+  );
+}
+
+/** `YYYY-MM-DD` calendar date of an instant in the reporting timezone. */
+export function taxDateKey(
+  timestamp: number,
+  timeZone: string = TAX_REPORTING_TIME_ZONE
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(timestamp));
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** Inclusive start / exclusive end instants of a tax year in the reporting timezone. */
+export function taxYearBounds(
+  year: number,
+  timeZone: string = TAX_REPORTING_TIME_ZONE
+): { start: number; end: number } {
+  return {
+    start: Date.parse(`${year}-01-01T00:00:00Z`),
+    end: Date.parse(`${year + 1}-01-01T00:00:00Z`),
+  };
+}
+
 export interface TaxableTransaction {
   id: string;
   assetPair: string;
@@ -96,8 +141,7 @@ export function computeTaxReport(
   jurisdiction: TaxJurisdiction
 ): TaxReport {
   const rates = TAX_RATES[jurisdiction];
-  const startOfYear = new Date(year, 0, 1).getTime();
-  const endOfYear = new Date(year + 1, 0, 1).getTime();
+  const { start: startOfYear, end: endOfYear } = taxYearBounds(year);
 
   const yearTransactions = transactions.filter(
     (tx) => tx.timestamp >= startOfYear && tx.timestamp < endOfYear
@@ -193,7 +237,7 @@ export const CSV_PRESETS: Record<CsvPreset, CsvPresetDefinition> = {
       "Conversion Rate",
     ],
     row: (e) => [
-      e.date.toISOString().split("T")[0],
+      taxDateKey(e.date.getTime()),
       e.assetPair,
       e.amount.toFixed(6),
       e.costBasis.toFixed(2),
@@ -220,7 +264,7 @@ export const CSV_PRESETS: Record<CsvPreset, CsvPresetDefinition> = {
     row: (e) => {
       const [base, quote] = e.assetPair.split("/");
       return [
-        e.date.toISOString().split("T")[0],
+        taxDateKey(e.date.getTime()),
         e.proceeds.toFixed(2),
         quote ?? "USD",
         e.amount.toFixed(6),
@@ -293,7 +337,7 @@ export function formatForTurboTax(report: TaxReport): string {
     lines.push(
       "TD",
       `N${e.assetPair}`,
-      `D${e.date.toLocaleDateString("en-US")}`,
+      `D${taxDateKey(e.date.getTime())}`,
       `$${e.proceeds.toFixed(2)}`,
       `$${e.costBasis.toFixed(2)}`,
       "^"
@@ -314,7 +358,7 @@ export function formatForTaxAct(report: TaxReport): string {
   const rows = report.entries.map((e) => [
     e.assetPair,
     "Various",
-    e.date.toISOString().split("T")[0],
+    taxDateKey(e.date.getTime()),
     e.proceeds.toFixed(2),
     e.costBasis.toFixed(2),
     e.gainLoss.toFixed(2),

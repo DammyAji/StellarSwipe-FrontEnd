@@ -34,6 +34,9 @@ import {
   type CsvPreset,
   type MultiYearSummaryRow,
   TAX_RATES,
+  TAX_REPORTING_TIME_ZONE,
+  taxDateKey,
+  taxYearOf,
   CSV_PRESETS,
   computeTaxReport,
   computeMultiYearSummary,
@@ -300,7 +303,7 @@ export function TaxReportingTool() {
   const yearTransactions = useMemo(
     () =>
       transactions.filter(
-        (tx) => new Date(tx.timestamp).getFullYear() === selectedYear
+        (tx) => taxYearOf(tx.timestamp) === selectedYear
       ),
     [transactions, selectedYear]
   );
@@ -690,6 +693,26 @@ export function TaxReportingTool() {
             </div>
           )}
 
+          {/* Reporting timezone (#1060) */}
+          <div className="flex flex-col gap-1.5 justify-end">
+            <span className="text-xs font-medium text-foreground-muted flex items-center gap-1">
+              <Globe size={11} aria-hidden="true" />
+              Reporting Timezone
+            </span>
+            <p
+              className="text-xs text-foreground-muted"
+              data-testid="tax-reporting-timezone"
+            >
+              <span className="font-semibold text-foreground">
+                {TAX_REPORTING_TIME_ZONE}
+              </span>{" "}
+              — {selectedYear} runs{" "}
+              {taxDateKey(Date.parse(`${selectedYear}-01-01T00:00:00Z`))} to{" "}
+              {taxDateKey(Date.parse(`${selectedYear}-12-31T00:00:00Z`))} in this
+              timezone, even if your local timezone differs.
+            </p>
+          </div>
+
           {/* Tax rate info */}
           <div className="flex flex-col gap-1.5 justify-end">
             <p className="text-xs text-foreground-muted">
@@ -742,7 +765,8 @@ export function TaxReportingTool() {
             </h3>
             <p className="text-xs text-foreground-muted mt-0.5">
               Select the years you want to compare. All years use the{" "}
-              {TAX_RATES[jurisdiction].label} ({jurisdiction}) rates.
+              {TAX_RATES[jurisdiction].label} ({jurisdiction}) rates and are
+              interpreted in the {TAX_REPORTING_TIME_ZONE} reporting timezone.
             </p>
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-4">
@@ -976,7 +1000,7 @@ export function TaxReportingTool() {
                           className="border-b border-border/50 last:border-0"
                         >
                           <td className="py-2 pr-4 text-foreground-muted">
-                            {entry.date.toISOString().split("T")[0]}
+                            {taxDateKey(entry.date.getTime())}
                           </td>
                           <td className="py-2 pr-4 font-mono font-medium text-foreground">
                             {entry.assetPair}

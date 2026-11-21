@@ -1,18 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   DownloadCloud,
   FileClock,
   ShieldCheck,
   CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-type ExportStatus = "pending" | "processing" | "ready";
+type ExportStatus = "pending" | "processing" | "ready" | "canceled";
+
+const ACTIVE_STATUSES: ExportStatus[] = ["pending", "processing"];
+
+const STATUS_LABELS: Record<ExportStatus, string> = {
+  pending: "Queued",
+  processing: "In progress",
+  ready: "Ready",
+  canceled: "Canceled",
+};
+
+const STATUS_STYLES: Record<ExportStatus, string> = {
+  pending: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  processing: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+  ready: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  canceled: "border-white/20 bg-white/5 text-foreground-muted",
+};
 
 interface ExportRequest {
   id: string;
@@ -93,9 +110,19 @@ function createExportDownloadUrl(payload: string) {
 export default function DataExportRequestPage() {
   const [requests, setRequests] = useState<ExportRequest[]>([]);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const timersRef = useRef<Record<string, number[]>>({});
 
   useEffect(() => {
     setRequests(readRequests());
+  }, []);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      Object.values(timers).forEach((ids) =>
+        ids.forEach((id) => window.clearTimeout(id))
+      );
+    };
   }, []);
 
   useEffect(() => {
@@ -117,8 +144,42 @@ export default function DataExportRequestPage() {
   );
 
   const hasActiveRequest = Boolean(
-    latestRequest && ["pending", "processing"].includes(latestRequest.status)
+    latestRequest && ACTIVE_STATUSES.includes(latestRequest.status)
   );
+
+  const updateRequest = (
+    id: string,
+    updater: (request: ExportRequest) => ExportRequest
+  ) => {
+    setRequests((current) => {
+      const updated = current.map((request) =>
+        request.id === id ? updater(request) : request
+      );
+      writeRequests(updated);
+      return updated;
+    });
+  };
+
+  const clearTimers = (id: string) => {
+    const ids = timersRef.current[id];
+    if (!ids) return;
+    ids.forEach((timerId) => window.clearTimeout(timerId));
+    delete timersRef.current[id];
+  };
+
+  const cancelExport = (id: string) => {
+    clearTimers(id);
+    updateRequest(id, (request) =>
+      ACTIVE_STATUSES.includes(request.status)
+        ? {
+            ...request,
+            status: "canceled" as ExportStatus,
+            downloadUrl: undefined,
+            downloadFileName: undefined,
+          }
+        : request
+    );
+  };
 
   const requestExport = () => {
     if (hasActiveRequest) {
@@ -135,19 +196,15 @@ export default function DataExportRequestPage() {
     setRequests(next);
     writeRequests(next);
 
-    window.setTimeout(() => {
-      setRequests((current) => {
-        const updated: ExportRequest[] = current.map((request) =>
-          request.id === nextRequest.id
-            ? { ...request, status: "processing" as ExportStatus }
-            : request
-        );
-        writeRequests(updated);
-        return updated;
-      });
+    const processingTimer = window.setTimeout(() => {
+      updateRequest(nextRequest.id, (request) =>
+        request.status === "pending"
+          ? { ...request, status: "processing" as ExportStatus }
+          : request
+      );
     }, EXPORT_TIMINGS.processing);
 
-    window.setTimeout(() => {
+    const readyTimer = window.setTimeout(() => {
       const payload = buildExportPayload(nextRequest.requestedAt);
       const objectUrl = createExportDownloadUrl(payload);
 
@@ -158,21 +215,20 @@ export default function DataExportRequestPage() {
         return objectUrl;
       });
 
-      setRequests((current) => {
-        const updated: ExportRequest[] = current.map((request) =>
-          request.id === nextRequest.id
-            ? {
-                ...request,
-                status: "ready" as ExportStatus,
-                downloadUrl: objectUrl ?? undefined,
-                downloadFileName: `account-data-export-${new Date().toISOString()}.json`,
-              }
-            : request
-        );
-        writeRequests(updated);
-        return updated;
-      });
+      updateRequest(nextRequest.id, (request) =>
+        ACTIVE_STATUSES.includes(request.status)
+          ? {
+              ...request,
+              status: "ready" as ExportStatus,
+              downloadUrl: objectUrl ?? undefined,
+              downloadFileName: `account-data-export-${new Date().toISOString()}.json`,
+            }
+          : request
+      );
+      delete timersRef.current[nextRequest.id];
     }, EXPORT_TIMINGS.ready);
+
+    timersRef.current[nextRequest.id] = [processingTimer, readyTimer];
   };
 
   return (
@@ -219,11 +275,23 @@ export default function DataExportRequestPage() {
               Request full account export
             </Button>
 
-            {hasActiveRequest && (
-              <p className="text-sm text-foreground-muted">
-                Another export request is already being prepared. Please wait until
-                it completes before requesting another one.
-              </p>
+            {hasActiveRequest && latestRequest && (
+              <div className="space-y-2">
+                <p className="text-sm text-foreground-muted">
+                  Another export request is already being prepared. You can cancel
+                  it below or wait until it completes before requesting another
+                  one.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => cancelExport(latestRequest.id)}
+                  className="gap-2"
+                  aria-label="Cancel in-progress account data export"
+                >
+                  <XCircle className="h-4 w-4" aria-hidden="true" />
+                  Cancel export
+                </Button>
+              </div>
             )}
 
             {latestRequest?.status === "ready" && latestRequest.downloadUrl && (
@@ -268,9 +336,27 @@ export default function DataExportRequestPage() {
                     <span>
                       {new Date(request.requestedAt).toLocaleString()}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
-                      <FileClock className="h-3.5 w-3.5" />
-                      {request.status}
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${STATUS_STYLES[request.status]}`}
+                      >
+                        <FileClock className="h-3.5 w-3.5" aria-hidden="true" />
+                        {STATUS_LABELS[request.status]}
+                      </span>
+                      {ACTIVE_STATUSES.includes(request.status) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => cancelExport(request.id)}
+                          className="gap-1 text-xs"
+                          aria-label={`Cancel export requested ${new Date(
+                            request.requestedAt
+                          ).toLocaleString()}`}
+                        >
+                          <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          Cancel
+                        </Button>
+                      )}
                     </span>
                   </li>
                 ))}
@@ -294,6 +380,13 @@ export default function DataExportRequestPage() {
             {latestRequest?.status === "ready" && (
               <p className="mt-3 text-xs text-foreground-muted">
                 Your export is ready and can be downloaded from this page.
+              </p>
+            )}
+
+            {latestRequest?.status === "canceled" && (
+              <p className="mt-3 text-xs text-foreground-muted">
+                Your latest export was canceled. No file was produced, so there is
+                nothing to download. You can request a new export at any time.
               </p>
             )}
           </CardContent>

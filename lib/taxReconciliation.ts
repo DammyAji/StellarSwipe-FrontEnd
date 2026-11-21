@@ -1,5 +1,5 @@
 import Papa from "papaparse";
-import type { TaxableTransaction } from "@/lib/taxUtils";
+import { taxDateKey, type TaxableTransaction } from "@/lib/taxUtils";
 
 export interface ImportedTaxRow {
   /** 1-based row number in the imported file (excluding the header). */
@@ -102,7 +102,7 @@ export function parseImportedRows(csv: string): ParseResult {
 }
 
 function describe(tx: TaxableTransaction): string {
-  return `${tx.assetPair} ${tx.amount} on ${new Date(tx.timestamp).toISOString().split("T")[0]}`;
+  return `${tx.assetPair} ${tx.amount} on ${taxDateKey(tx.timestamp)}`;
 }
 
 function sameAmount(a: number, b: number): boolean {
@@ -131,7 +131,7 @@ export function reconcileRows(rows: readonly ImportedTaxRow[], transactions: rea
         .filter(
           (tx) =>
             tx.assetPair.toLowerCase() === row.assetPair.toLowerCase() &&
-            new Date(tx.timestamp).toISOString().split("T")[0] === row.date &&
+            taxDateKey(tx.timestamp) === row.date &&
             sameAmount(tx.amount, row.amount)
         )
         .map((tx) => ({ transactionId: tx.id, basis: "details" as const, label: describe(tx) }));

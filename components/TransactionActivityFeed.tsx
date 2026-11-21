@@ -40,8 +40,7 @@ import { PrivateValue } from "@/components/PrivateValue";
 import { JournalReminderChip } from "@/components/JournalReminderChip";
 import { JournalReminderDialog } from "@/components/JournalReminderDialog";
 import { JournalRevisionCompare } from "@/components/JournalRevisionCompare";
-import { generateJournalExport } from "@/lib/journalExport";
-import { triggerDownload } from "@/lib/taxUtils";
+import { downloadJournalExport } from "@/lib/journalExport";
 
 const TYPE_OPTIONS = [
   { label: "All", value: "ALL" },
@@ -492,30 +491,40 @@ export function TransactionActivityFeed() {
     );
   }, []);
 
-  // Exports exactly the selected entries; an empty selection or a generation
-  // failure is reported instead of downloading anything.
+  // Exports exactly the selected entries; an empty selection, a generation
+  // failure or a blocked download is reported with a next step instead of
+  // success feedback.
   const handleExportSelected = useCallback(() => {
     const selected = history.filter((item) => selectedIds.includes(item.id));
-    const result = generateJournalExport(selected);
+    const result = downloadJournalExport(selected);
     if (!result.ok) {
-      toast.error(
-        result.reason === "empty-selection" ? "Nothing selected to export" : "Export failed",
-        { description: result.message, duration: 4000 }
-      );
+      if (result.reason === "empty-selection") {
+        toast.error("Nothing selected to export", {
+          description: result.message,
+          duration: 4000,
+        });
+        return;
+      }
+      if (result.reason === "download-blocked") {
+        toast.error("Download blocked", {
+          description: `${result.message} Allow downloads for this site, then select the entries and export again.`,
+          duration: 6000,
+        });
+        return;
+      }
+      toast.error("Export failed", {
+        description: `${result.message} Try exporting again, or select fewer entries.`,
+        duration: 6000,
+      });
       return;
     }
-    try {
-      triggerDownload(result.json, result.filename, "application/json");
-      toast.success(`Exported ${result.count} ${result.count === 1 ? "entry" : "entries"}`, {
-        description: result.filename,
+    toast.success(
+      `Exported ${result.count} ${result.count === 1 ? "entry" : "entries"}`,
+      {
+        description: `${result.filename} was saved to your downloads.`,
         duration: 3000,
-      });
-    } catch (err) {
-      toast.error("Export failed", {
-        description: err instanceof Error ? err.message : "The file could not be downloaded.",
-        duration: 4000,
-      });
-    }
+      }
+    );
   }, [history, selectedIds]);
 
   // Clears only the tag selection so type, status and sort stay as they are.

@@ -1,4 +1,4 @@
-import type { TaxableTransaction } from "@/lib/taxUtils";
+import { taxYearOf, type TaxableTransaction } from "@/lib/taxUtils";
 
 export interface YearDataSummary {
   year: number;
@@ -7,14 +7,14 @@ export interface YearDataSummary {
   hasData: boolean;
 }
 
-/** How many transactions exist for each requested tax year (by local calendar year). */
+/** How many transactions exist for each requested tax year (in the reporting timezone). */
 export function summarizeYearData(
   transactions: readonly Pick<TaxableTransaction, "timestamp">[],
   years: readonly number[]
 ): YearDataSummary[] {
   const counts = new Map<number, number>();
   for (const tx of transactions) {
-    const year = new Date(tx.timestamp).getFullYear();
+    const year = taxYearOf(tx.timestamp);
     counts.set(year, (counts.get(year) ?? 0) + 1);
   }
   return years.map((year) => {

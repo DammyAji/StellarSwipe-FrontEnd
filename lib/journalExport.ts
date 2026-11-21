@@ -65,6 +65,58 @@ export type JournalExportResult =
   | { ok: true; json: string; filename: string; count: number }
   | { ok: false; reason: "empty-selection" | "generation-failed"; message: string };
 
+export type JournalExportDownloadResult =
+  | { ok: true; filename: string; count: number }
+  | {
+      ok: false;
+      reason: "empty-selection" | "generation-failed" | "download-blocked";
+      message: string;
+    };
+
+/**
+ * Generates the export and hands it to the browser as a download. A blocked or
+ * unsupported download is reported as an explicit failure so callers never
+ * announce success for a file the user did not receive.
+ */
+export function downloadJournalExport(
+  selected: readonly TransactionHistoryItem[],
+  now: Date = new Date()
+): JournalExportDownloadResult {
+  const result = generateJournalExport(selected, now);
+  if (!result.ok) return result;
+
+  try {
+    if (typeof document === "undefined" || typeof URL?.createObjectURL !== "function") {
+      return {
+        ok: false,
+        reason: "download-blocked",
+        message: "Downloads are not supported in this browser. Try a different browser.",
+      };
+    }
+    const blob = new Blob([result.json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    try {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      anchor.rel = "noopener";
+      anchor.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    return { ok: true, filename: result.filename, count: result.count };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "download-blocked",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The download was blocked. Allow downloads for this site and try again.",
+    };
+  }
+}
+
 export function toExportEntry(entry: TransactionHistoryItem): JournalExportEntry {
   const timestamp = Number.isFinite(entry.timestamp) ? new Date(entry.timestamp) : null;
   const out: JournalExportEntry = {
