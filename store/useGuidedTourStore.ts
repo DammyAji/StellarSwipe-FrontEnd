@@ -3,7 +3,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const GUIDED_TOUR_STEP_IDS = ["wallet", "signals", "compare"] as const;
+export const GUIDED_TOUR_STEP_IDS = [
+  "wallet",
+  "signals",
+  "compare",
+  "feed-review",
+  "feed-details",
+  "feed-decide",
+] as const;
 export type GuidedTourStepId = (typeof GUIDED_TOUR_STEP_IDS)[number];
 
 interface GuidedTourState {

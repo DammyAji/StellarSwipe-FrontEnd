@@ -3,6 +3,7 @@
 import { ChevronRight, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useChartTooltip } from "@/hooks/useChartTooltip";
 import {
@@ -159,6 +160,11 @@ export function LargestDailyMovements({
           <EmptyState
             title="Insufficient history"
             description="We need at least two days of portfolio data to calculate daily movements. Check back after more history accumulates."
+            action={
+              <Button asChild size="sm" variant="outline">
+                <a href="/performance">View performance details</a>
+              </Button>
+            }
             className="h-32 rounded-xl bg-transparent py-4"
           />
         </CardContent>

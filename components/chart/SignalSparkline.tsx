@@ -48,6 +48,11 @@ export function SignalSparkline({ data, className }: SignalSparklineProps) {
         <span aria-hidden="true">
           {isEmpty ? "No chart data yet" : "Not enough history yet"}
         </span>
+        <span className="sr-only">
+          {isEmpty
+            ? "Check back once this asset has recorded price history."
+            : "Check back once more price history has accumulated."}
+        </span>
       </div>
     );
   }

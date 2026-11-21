@@ -17,6 +17,11 @@ import {
 interface PriceAlertFormProps {
   /** The asset symbol this form manages alerts for, e.g. "XLM". */
   symbol: string;
+  /**
+   * Optional price used to prefill the threshold input when creating a new
+   * alert (e.g. the signal's current quote price).
+   */
+  initialThreshold?: number | null;
   /** Called when the user dismisses the panel entirely. */
   onDismiss?: () => void;
   className?: string;
@@ -102,7 +107,12 @@ function AlertRow({ alert }: { alert: PriceAlert }) {
  * directly so it can be dropped into any watchlist item row without threading
  * state through parent components.
  */
-export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormProps) {
+export function PriceAlertForm({
+  symbol,
+  initialThreshold,
+  onDismiss,
+  className,
+}: PriceAlertFormProps) {
   const {
     formState,
     openCreate,
@@ -112,6 +122,7 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
   } = usePriceAlertStore();
 
   const existingAlerts = useAlertsForSymbol(symbol);
+  const hasExistingAlerts = existingAlerts.length > 0;
 
   // Local form inputs — initialised from the alert being edited (if any).
   const editingAlert =
@@ -120,7 +131,11 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
       : null;
 
   const [threshold, setThreshold] = useState<string>(
-    editingAlert ? String(editingAlert.threshold) : ""
+    editingAlert
+      ? String(editingAlert.threshold)
+      : initialThreshold != null && Number.isFinite(initialThreshold)
+        ? String(initialThreshold)
+        : ""
   );
   const [direction, setDirection] = useState<AlertDirection>(
     editingAlert ? editingAlert.direction : "above"
@@ -130,11 +145,17 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
   // Sync inputs when a different alert is opened for editing.
   useEffect(() => {
     if (formState.type === "editing") {
-      setThreshold(editingAlert ? String(editingAlert.threshold) : "");
+      setThreshold(
+        editingAlert
+          ? String(editingAlert.threshold)
+          : initialThreshold != null && Number.isFinite(initialThreshold)
+            ? String(initialThreshold)
+            : ""
+      );
       setDirection(editingAlert ? editingAlert.direction : "above");
       setTouched(false);
     }
-  }, [formState, editingAlert]);
+  }, [formState, editingAlert, initialThreshold]);
 
   const thresholdId = useId();
   const directionId = useId();
@@ -149,8 +170,12 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
 
   // --- Inline validation ---
   const numericThreshold = parseFloat(threshold);
-  const isThresholdValid = threshold !== "" && Number.isFinite(numericThreshold) && numericThreshold > 0;
+  const isThresholdValid =
+    threshold.trim() !== "" &&
+    Number.isFinite(numericThreshold) &&
+    numericThreshold > 0;
   const showThresholdError = touched && !isThresholdValid;
+  const thresholdErrorId = `${thresholdId}-error`;
 
   // --- Submit ---
   const handleSubmit = (e: React.FormEvent) => {
@@ -352,7 +377,7 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
                   onBlur={() => setTouched(true)}
                   placeholder="e.g. 0.15"
                   aria-invalid={showThresholdError}
-                  aria-describedby={showThresholdError ? `${thresholdId}-error` : undefined}
+                  aria-describedby={showThresholdError ? thresholdErrorId : undefined}
                   className={cn(
                     "w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono text-foreground placeholder-foreground-subtle focus:outline-none focus:ring-2 focus:ring-blue-500",
                     showThresholdError ? "border-red-500" : "border-border"
@@ -360,7 +385,7 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
                 />
                 {showThresholdError && (
                   <p
-                    id={`${thresholdId}-error`}
+                    id={thresholdErrorId}
                     role="alert"
                     className="mt-1 text-xs text-red-400"
                   >
@@ -382,7 +407,8 @@ export function PriceAlertForm({ symbol, onDismiss, className }: PriceAlertFormP
               <div className="flex items-center gap-2 pt-1">
                 <button
                   type="submit"
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+                  disabled={!isThresholdValid}
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isEditingExisting ? "Save changes" : "Set alert"}
                 </button>

@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Wallet, LayoutList, GitCompare, X } from "lucide-react";
+import {
+  ArrowRight,
+  Wallet,
+  LayoutList,
+  GitCompare,
+  X,
+  ListChecks,
+  PanelRight,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useOnboardingStore, useOnboardingHydrated } from "@/store/useOnboardingStore";
 import {
@@ -32,6 +41,24 @@ const STEP_COPY: Record<
     title: "Compare signals",
     description:
       "Add signals to a side-by-side comparison before deciding which one to act on.",
+  },
+  "feed-review": {
+    icon: ListChecks,
+    title: "Review a signal",
+    description:
+      "Each card shows the ticker, direction, confidence and provider. Tap or click a card to review it — nothing is traded from here.",
+  },
+  "feed-details": {
+    icon: PanelRight,
+    title: "Inspect the details",
+    description:
+      "The detail pane shows the full rationale, status and related active signals so you can check the setup before acting.",
+  },
+  "feed-decide": {
+    icon: ShieldCheck,
+    title: "Make a deliberate decision",
+    description:
+      "Take your time: bookmark, compare or dismiss. This walkthrough never places a trade — you stay in control.",
   },
 };
 
@@ -72,6 +99,21 @@ export function GuidedTourSpotlight() {
     if (!stepId) return;
     setRect(measure(stepId));
   }, [stepId]);
+
+  // Feed steps anchor to the first signal card, which only exists once the
+  // feed has rendered — retry briefly until the target is measurable.
+  useEffect(() => {
+    if (!active || !stepId || !stepId.startsWith("feed-")) return;
+    if (measure(stepId)) return;
+    const interval = setInterval(() => {
+      const next = measure(stepId);
+      if (next) {
+        setRect(next);
+        clearInterval(interval);
+      }
+    }, 250);
+    return () => clearInterval(interval);
+  }, [active, stepId]);
 
   // Auto-start the spotlight tour once the intro modal has been handled —
   // this is the "first meaningful action" trigger for returning users who
@@ -158,6 +200,12 @@ export function GuidedTourSpotlight() {
   }
 
   const tooltipTop = rect.top + rect.height + 12;
+  const tooltipLeft = Math.min(Math.max(rect.left, 12), window.innerWidth - 332);
+  const tooltipHeight = 200;
+  const fitsBelow = tooltipTop + tooltipHeight <= window.innerHeight;
+  const tooltipStyle = fitsBelow
+    ? { top: tooltipTop, left: tooltipLeft }
+    : { top: Math.max(12, rect.top - tooltipHeight - 12), left: tooltipLeft };
 
   return (
     <>
@@ -178,10 +226,7 @@ export function GuidedTourSpotlight() {
         role="dialog"
         aria-label={`Guided tour: ${title}`}
         className="fixed z-[60] w-[min(90vw,320px)] rounded-2xl border border-border bg-surface-high/95 p-4 shadow-elevation-3 backdrop-blur transition-all duration-200"
-        style={{
-          top: Math.min(tooltipTop, window.innerHeight - 180),
-          left: Math.min(Math.max(rect.left, 12), window.innerWidth - 332),
-        }}
+        style={tooltipStyle}
       >
         {cardBody}
       </div>

@@ -151,7 +151,20 @@ export function MiniChart({
     [activeIndex]
   );
 
-  if (!data.length) return null;
+  // #656: never render a blank box — explain why the chart is unavailable.
+  if (!data.length) {
+    return (
+      <div
+        role="status"
+        aria-label="No chart data is available yet. Check back once this asset has recorded price history."
+        data-testid="chart-unavailable-placeholder"
+        className={`flex items-center justify-center rounded-md border border-dashed border-white/10 bg-white/5 px-2 text-center text-[11px] text-foreground-muted ${className}`}
+        style={{ width, height }}
+      >
+        <span aria-hidden="true">No chart data yet</span>
+      </div>
+    );
+  }
 
   const lineColor = isPositive ? "#22c55e" : "#ef4444";
   const areaOpacity = isPositive ? 0.15 : 0.1;

@@ -443,6 +443,11 @@ export function PortfolioPerformanceBenchmarkChart({
           <EmptyState
             title="No portfolio history yet"
             description={`Once you hold at least one asset, we'll chart your performance against the ${benchmark.name} benchmark here.`}
+            action={
+              <Button asChild size="sm" variant="outline">
+                <a href="/app">Add your first asset</a>
+              </Button>
+            }
             className="h-48 rounded-xl bg-transparent py-6"
           />
         </CardContent>
@@ -466,6 +471,11 @@ export function PortfolioPerformanceBenchmarkChart({
           <EmptyState
             title="Not enough history yet"
             description={`We need a bit more price history before we can chart your performance against the ${benchmark.name} benchmark. Check back shortly.`}
+            action={
+              <Button asChild size="sm" variant="outline">
+                <a href="/performance">View performance details</a>
+              </Button>
+            }
             className="h-48 rounded-xl bg-transparent py-6"
           />
         </CardContent>

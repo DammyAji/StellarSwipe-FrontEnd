@@ -2,6 +2,7 @@
 
 import type { Signal } from "@/lib/api-types.generated";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 
 interface ComparisonChartProps {
   signals: Signal[];
@@ -15,6 +16,11 @@ export function ComparisonChart({ signals }: ComparisonChartProps) {
       <EmptyState
         title="No signals to compare yet"
         description="Add two or more signals above to see a side-by-side comparison chart."
+        action={
+          <Button asChild size="sm" variant="outline">
+            <a href="/app">Browse signals</a>
+          </Button>
+        }
         className="rounded-xl bg-transparent py-6"
       />
     );

@@ -3,11 +3,27 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
 import { requestNotificationPermission } from "@/lib/notifications";
 
 const PROMPT_DISMISSED_KEY = "stellarswipe:notification-prompt-dismissed";
 const PROMPT_DELAY_MS = 1500;
+
+/**
+ * Records the user's decision so the prompt is never shown again on this
+ * device, regardless of whether the browser prompt was accepted or declined.
+ */
+function persistDecision() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PROMPT_DISMISSED_KEY, "true");
+  } catch {
+    // Storage can be unavailable (private mode / quota) — the in-memory
+    // `dismissed` state still hides the prompt for this session.
+  }
+}
 
 /**
  * Contextual reasons shown to the user *before* the native browser
@@ -49,11 +65,12 @@ export function NotificationPermissionPrompt({
   variant = "floating",
   className,
 }: NotificationPermissionPromptProps) {
-  const { alertsEnabled, toggleAlerts, permissionStatus, setPermissionStatus } =
+  const { toggleAlerts, permissionStatus, setPermissionStatus } =
     useNotificationPreference();
   const [shouldRender, setShouldRender] = useState(false);
   const [dismissed, setDismissed] = useState(true);
   const [requesting, setRequesting] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 639px)");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -72,9 +89,7 @@ export function NotificationPermissionPrompt({
 
   const handleDismiss = () => {
     setDismissed(true);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(PROMPT_DISMISSED_KEY, "true");
-    }
+    persistDecision();
   };
 
   const handleEnable = async () => {
@@ -85,11 +100,9 @@ export function NotificationPermissionPrompt({
       setPermissionStatus(result);
       if (result === "granted") {
         toggleAlerts(true);
-        handleDismiss();
-      } else if (result === "denied") {
-        // Respect the browser's decision — never re-prompt automatically.
-        handleDismiss();
       }
+      // Any decision — granted or denied — is final for this device.
+      handleDismiss();
     } finally {
       setRequesting(false);
     }
@@ -105,13 +118,8 @@ export function NotificationPermissionPrompt({
       ? "fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 w-[min(92vw,380px)] animate-in fade-in slide-in-from-bottom-4"
       : "w-full";
 
-  return (
-    <div
-      role="dialog"
-      aria-labelledby="notification-prompt-title"
-      aria-describedby="notification-prompt-description"
-      className={`${containerClasses} ${className ?? ""} rounded-2xl border border-border bg-surface-high/95 p-5 shadow-elevation-3 backdrop-blur`}
-    >
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-sky/15 text-accent-sky">
@@ -135,8 +143,9 @@ export function NotificationPermissionPrompt({
         id="notification-prompt-description"
         className="mt-2 text-xs leading-5 text-foreground-muted"
       >
-        Before your browser asks permission, here's exactly what you'll get and
-        how to manage it later:
+        Turn on notifications and we&apos;ll tell you when a provider you follow
+        posts a new signal or a price you&apos;re watching moves. Your browser
+        will ask for permission next — you can say no and change your mind later.
       </p>
 
       <ul className="mt-3 space-y-2.5">
@@ -151,13 +160,23 @@ export function NotificationPermissionPrompt({
         ))}
       </ul>
 
-      <div className="mt-4 flex items-center gap-2">
-        <Button size="sm" className="flex-1 gap-1.5" onClick={handleEnable} disabled={requesting}>
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={handleDismiss}
+        >
+          Not now
+        </Button>
+        <Button
+          size="sm"
+          className="w-full flex-1 gap-1.5"
+          onClick={handleEnable}
+          disabled={requesting}
+        >
           <Bell size={13} aria-hidden="true" />
           {requesting ? "Requesting…" : "Enable notifications"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={handleDismiss}>
-          Not now
         </Button>
       </div>
 
@@ -165,6 +184,33 @@ export function NotificationPermissionPrompt({
         Skip this and you just won&apos;t get alerts yet — you can turn
         notifications on anytime from Preferences → Notifications.
       </p>
+    </>
+  );
+
+  // On small screens the floating card becomes a bottom sheet so the actions
+  // stay reachable above the mobile browser chrome and safe-area insets.
+  if (variant === "floating" && isMobile) {
+    return (
+      <BottomSheet
+        open
+        onClose={handleDismiss}
+        ariaLabel="Enable notifications"
+        initialFocus='button[aria-label="Dismiss notification prompt"]'
+        className="px-5 pb-5"
+      >
+        {content}
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-labelledby="notification-prompt-title"
+      aria-describedby="notification-prompt-description"
+      className={`${containerClasses} ${className ?? ""} rounded-2xl border border-border bg-surface-high/95 p-5 shadow-elevation-3 backdrop-blur`}
+    >
+      {content}
     </div>
   );
 }

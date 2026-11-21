@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -183,9 +184,16 @@ export const usePriceAlertStore = create<PriceAlertState>()(
   )
 );
 
-/** Returns all active alerts for a given symbol. */
+/**
+ * Returns all alerts for a given symbol.
+ *
+ * The selector returns a stable reference (the store's `alerts` array) so
+ * consumers don't re-render on every store read; filtering happens in a memo.
+ */
 export function useAlertsForSymbol(symbol: string): PriceAlert[] {
-  return usePriceAlertStore((s) =>
-    s.alerts.filter((a) => a.symbol === symbol)
+  const alerts = usePriceAlertStore((s) => s.alerts);
+  return useMemo(
+    () => alerts.filter((a) => a.symbol === symbol),
+    [alerts, symbol]
   );
 }
