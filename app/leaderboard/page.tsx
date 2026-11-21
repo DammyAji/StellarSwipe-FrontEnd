@@ -14,6 +14,7 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronUp,
+  Info,
   Keyboard,
   Pin,
   PinOff,
@@ -32,6 +33,12 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useWalletStore } from "@/store/useWalletStore";
 
 const PAGE_SIZE = 10;
@@ -57,6 +64,10 @@ interface ColumnConfig {
   width: number;
   align: "left" | "right";
   sortField?: SortField;
+  /** #1040: short label used in the inline definitions list. */
+  definitionLabel?: string;
+  /** #1040: units, time window and direction for non-obvious metrics. */
+  definition?: string;
 }
 
 const COLUMNS: ColumnConfig[] = [
@@ -68,6 +79,9 @@ const COLUMNS: ColumnConfig[] = [
     width: 100,
     align: "right",
     sortField: "overallScore",
+    definitionLabel: "Score",
+    definition:
+      "Overall provider score from 0 to 100, combining accuracy, consistency and signal volume over the selected time window. Higher is better.",
   },
   {
     key: "winRate",
@@ -75,6 +89,9 @@ const COLUMNS: ColumnConfig[] = [
     width: 100,
     align: "right",
     sortField: "winRate",
+    definitionLabel: "Win Rate",
+    definition:
+      "Percentage (0–100%) of closed signals that hit their target within the selected time window. Higher is better.",
   },
   {
     key: "recentPerformance",
@@ -82,6 +99,9 @@ const COLUMNS: ColumnConfig[] = [
     width: 100,
     align: "right",
     sortField: "recentPerformance",
+    definitionLabel: "Recent",
+    definition:
+      "Return in percent over the last 7 days, regardless of the selected time window. Positive means gains, negative means losses; higher is better.",
   },
 ];
 
@@ -116,6 +136,39 @@ const DEFAULT_DIRECTION: Record<SortField, SortDirection> = {
   winRate: "desc",
   recentPerformance: "desc",
 };
+
+// #1040: non-obvious metrics that get an inline, keyboard-accessible
+// definition (units, time window and direction).
+const METRIC_DEFINITIONS = COLUMNS.filter(
+  (col): col is ColumnConfig & { definition: string; definitionLabel: string } =>
+    Boolean(col.definition && col.definitionLabel)
+);
+
+// #1040: inline definitions rendered below the table so they never cover the
+// ranking, and reachable by keyboard via the header info buttons.
+function MetricDefinitions() {
+  return (
+    <section
+      aria-labelledby="leaderboard-metric-definitions-heading"
+      className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4"
+    >
+      <h2
+        id="leaderboard-metric-definitions-heading"
+        className="mb-2 text-sm font-medium text-white"
+      >
+        Metric definitions
+      </h2>
+      <dl className="space-y-2 text-xs text-white/70 sm:text-sm">
+        {METRIC_DEFINITIONS.map((col) => (
+          <div key={col.key} id={`metric-definition-${col.key}`}>
+            <dt className="font-medium text-white/90">{col.definitionLabel}</dt>
+            <dd>{col.definition}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
 
 // #776: skeleton rows mirror the real table's column widths so the loading
 // state reserves the same major regions as the loaded content and avoids
@@ -600,6 +653,31 @@ function LeaderboardPageInner() {
                       ) : (
                         <span>{col.label}</span>
                       )}
+                      {col.definition && (
+                        <TooltipProvider delayDuration={200}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`About ${col.label}: units, time window and direction`}
+                                aria-describedby={`metric-definition-${col.key}`}
+                                className="rounded-full text-white/40 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                              >
+                                <Info
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="bottom"
+                              className="max-w-[min(16rem,calc(100vw-2rem))] whitespace-normal text-left"
+                            >
+                              {col.definition}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       <button
                         type="button"
                         onClick={() => togglePin(col.key)}
@@ -660,6 +738,8 @@ function LeaderboardPageInner() {
             </tbody>
           </table>
         </div>
+
+        <MetricDefinitions />
 
         {currentUser && currentUserPage && currentUserPage !== currentPage && (
           <div className="mt-4 flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/70">

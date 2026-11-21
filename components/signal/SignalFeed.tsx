@@ -735,6 +735,18 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
                           </div>
                         )}
 
+                        <div className="mb-3">
+                          <SignalCard
+                            pair={`${signal.ticker}/USDC`}
+                            action={signal.action === "SELL" ? "SELL" : "BUY"}
+                            confidence={signal.confidence}
+                            analysis={signal.details}
+                            timestamp={new Date(signal.timestamp)}
+                            providerName={signal.provider}
+                            expired={isExpired}
+                          />
+                        </div>
+
                         <div
                           className={
                             isExpired

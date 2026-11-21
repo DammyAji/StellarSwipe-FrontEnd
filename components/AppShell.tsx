@@ -206,6 +206,7 @@ export function AppShell({ children }: AppShellProps) {
                     onTrade={handleTrade}
                     providerStake={50000}
                     providerReputation={85}
+                    walletMissing={!connected}
                     portfolioBalance={portfolioBalance}
                   />
                   <div className="flex gap-3">
