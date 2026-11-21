@@ -6,6 +6,7 @@ import { usePrivacyStore, PRIVACY_MASK } from "@/store/usePrivacyStore";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PortfolioEmptyState } from "@/components/PortfolioEmptyState";
+import { ProfitLossStatus } from "@/components/ProfitLossStatus";
 
 export function PnLWidget() {
   const { totalRealizedPnL, totalUnrealizedPnL, totalValue, isLoading, assets } = usePortfolio();
@@ -111,6 +112,7 @@ export function PnLWidget() {
               maximumFractionDigits: 2,
             })}`)}
           </p>
+          <ProfitLossStatus value={totalPnL} masked={privacyMode} className="mt-2" />
         </div>
 
         {/* Portfolio Return Percentage */}
@@ -129,6 +131,7 @@ export function PnLWidget() {
           >
             {mask(`${isPositive ? "+" : ""}${portfolioReturn.toFixed(2)}%`)}
           </p>
+          <ProfitLossStatus value={totalPnL} masked={privacyMode} className="mt-2" />
         </div>
 
         {/* Realized and Unrealized breakdown */}
@@ -148,6 +151,7 @@ export function PnLWidget() {
             >
               {mask(`${isPositiveRealized ? "+" : ""}${totalRealizedPnL.toLocaleString()}`)}
             </p>
+            <ProfitLossStatus value={totalRealizedPnL} masked={privacyMode} className="mt-2" />
           </div>
           <div
             className={cn(
@@ -164,6 +168,7 @@ export function PnLWidget() {
             >
               {mask(`${isPositiveUnrealized ? "+" : ""}${totalUnrealizedPnL.toLocaleString()}`)}
             </p>
+            <ProfitLossStatus value={totalUnrealizedPnL} masked={privacyMode} className="mt-2" />
           </div>
         </div>
       </CardContent>

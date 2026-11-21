@@ -12,16 +12,19 @@ const statusMap = {
   PENDING: {
     label: "Pending confirmation",
     icon: Clock3,
+    description: "The transaction is waiting for on-chain confirmation.",
     style: "border-yellow-500/20 bg-yellow-500/10 text-yellow-200",
   },
   SUCCEEDED: {
     label: "On-chain confirmed",
     icon: CheckCircle2,
+    description: "The transaction was confirmed on Stellar.",
     style: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
   },
   FAILED: {
     label: "Confirmation failed",
     icon: XCircle,
+    description: "The transaction failed and was not confirmed.",
     style: "border-red-500/20 bg-red-500/10 text-red-200",
   },
 };
@@ -36,16 +39,28 @@ export function OnChainConfirmationStatus({
     : undefined;
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-card p-4 shadow-sm">
+    <section
+      className="rounded-3xl border border-white/10 bg-card p-4 shadow-sm"
+      role="status"
+      aria-live="polite"
+      aria-label={`Transaction status: ${metadata.label}`}
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <metadata.icon size={18} className={cn("shrink-0", metadata.style)} />
+          <span
+            className={cn(
+              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border",
+              metadata.style,
+              "forced-color-adjust-auto forced-colors:border-[CanvasText] forced-colors:text-[CanvasText]",
+            )}
+            aria-hidden="true"
+          >
+            <metadata.icon size={16} aria-hidden="true" />
+          </span>
           <div>
             <p className="font-semibold text-foreground">{metadata.label}</p>
             <p className="text-sm text-muted-foreground">
-              {transactionHash
-                ? "Tracking the latest pending transaction on Stellar."
-                : "No active on-chain transaction yet."}
+              {transactionHash ? metadata.description : "No active on-chain transaction yet."}
             </p>
           </div>
         </div>

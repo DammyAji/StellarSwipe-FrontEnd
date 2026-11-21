@@ -10,6 +10,10 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
+  CheckCircle2,
+  XCircle,
+  TrendingDown,
+  TrendingUp,
   Download,
   Search,
   X,
@@ -131,10 +135,22 @@ const statusStyles = {
   FAILED: "bg-red-500/10 text-red-300 border-red-500/20",
 };
 
-const outcomeLabels = {
-  WIN: "Win",
-  LOSS: "Loss",
+const statusLabels = {
   PENDING: "Pending",
+  SUCCEEDED: "Succeeded",
+  FAILED: "Failed",
+};
+
+const statusIcons = {
+  PENDING: Clock3,
+  SUCCEEDED: CheckCircle2,
+  FAILED: XCircle,
+};
+
+const outcomeLabels = {
+  WIN: { label: "Profit", icon: TrendingUp },
+  LOSS: { label: "Loss", icon: TrendingDown },
+  PENDING: { label: "Pending", icon: Clock3 },
 };
 
 /**
@@ -598,6 +614,9 @@ export function TransactionActivityFeed() {
       const isPending = pendingIds.includes(item.id);
       const isFailed = failedIds.includes(item.id);
       const isDeleting = deletingId === item.id;
+      const StatusIcon = statusIcons[item.status];
+      const outcome = outcomeLabels[item.outcome];
+      const OutcomeIcon = outcome.icon;
 
       return (
         <article
@@ -609,16 +628,16 @@ export function TransactionActivityFeed() {
           aria-label={`${item.assetPair} transaction, ${item.status}`}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-start gap-2">
               <input
                 type="checkbox"
                 checked={selectedIds.includes(item.id)}
                 onChange={() => toggleSelected(item.id)}
                 disabled={isDeleting}
                 aria-label={`Select ${item.assetPair} entry`}
-                className="h-4 w-4 accent-blue-500"
+                className="mt-1 h-4 w-4 accent-blue-500"
               />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">
                   <HighlightedText text={item.assetPair} terms={searchTerms} />
                 </p>
@@ -652,29 +671,32 @@ export function TransactionActivityFeed() {
                 )}
               </div>
               {isPending && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-400">
-                  <Loader2 size={10} className="animate-spin" />
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] text-blue-700 dark:text-blue-300 forced-colors:border-[CanvasText] forced-colors:text-[CanvasText]">
+                  <Loader2 size={10} className="animate-spin" aria-hidden="true" />
                   Syncing
                 </span>
               )}
               {isFailed && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">
-                  <AlertCircle size={10} />
-                  Offline
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300 forced-colors:border-[CanvasText] forced-colors:text-[CanvasText]">
+                  <AlertCircle size={10} aria-hidden="true" />
+                  Sync failed
                 </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  "rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                  statusStyles[item.status]
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.16em] forced-color-adjust-auto forced-colors:border-[CanvasText] forced-colors:text-[CanvasText]",
+                  statusStyles[item.status],
                 )}
+                aria-label={`Transaction status: ${statusLabels[item.status]}`}
               >
-                {item.status}
+                <StatusIcon size={12} aria-hidden="true" />
+                {statusLabels[item.status]}
               </span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-muted-foreground">
-                {outcomeLabels[item.outcome]}
+              <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold">
+                <OutcomeIcon size={12} aria-hidden="true" />
+                {outcome.label}
               </span>
             </div>
           </div>
