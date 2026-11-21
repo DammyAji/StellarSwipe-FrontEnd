@@ -49,6 +49,12 @@ jest.mock("@/store/useSnoozeStore", () => ({
   selectVisibleSignals: (signals: unknown[]) => signals,
 }));
 
+const mockPinnedIds: string[] = [];
+jest.mock("@/store/usePinnedSignalsStore", () => ({
+  usePinnedSignalsStore: (selector: (s: { pinnedIds: string[] }) => unknown) =>
+    selector({ pinnedIds: mockPinnedIds }),
+}));
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------

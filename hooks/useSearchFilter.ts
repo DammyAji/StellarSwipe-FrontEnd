@@ -10,6 +10,8 @@ import {
 import { useBookmarkStore } from "@/store/useBookmarkStore";
 import { useFollowedProvidersStore } from "@/store/useFollowedProvidersStore";
 import { useSnoozeStore, selectVisibleSignals } from "@/store/useSnoozeStore";
+import { usePinnedSignalsStore } from "@/store/usePinnedSignalsStore";
+import { applyPins } from "@/lib/pinnedSignals";
 
 /** Default debounce delay in ms — short enough to feel instant, long enough to skip mid-keystroke renders */
 const DEBOUNCE_MS = 150;
@@ -73,6 +75,9 @@ export function useSearchFilter({
   const bookmarkedIds = useBookmarkStore((s) => s.bookmarks);
   const followedProviders = useFollowedProvidersStore((s) => s.followedProviders);
   const snoozedMap = useSnoozeStore((s) => s.snoozed);
+  // #1097: pinned signals are hoisted to the top of the feed without changing
+  // the global sort order or breaking pagination.
+  const pinnedIds = usePinnedSignalsStore((s) => s.pinnedIds);
 
   // searchValue is the immediate, unthrottled input state
   const [searchValue, setSearchValueState] = useState(provider);
@@ -182,7 +187,12 @@ export function useSearchFilter({
       );
     }
 
-    return copy;
+    // #1097: hoist pinned signals to the top after all filtering and sorting,
+    // so the global sort order is preserved for the rest of the feed and
+    // pagination is unaffected. Missing pins are ignored, never fabricated.
+    const pinned = applyPins(copy, pinnedIds);
+
+    return pinned;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     signals,
@@ -198,6 +208,7 @@ export function useSearchFilter({
     snoozedMap,
     snoozeTick,
     sortOrder,
+    pinnedIds,
   ]);
 
   const hasActiveFilters =
