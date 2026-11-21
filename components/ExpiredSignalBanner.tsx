@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock, RefreshCw } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 interface ExpiredSignalBannerProps {
   /** Called when the user clicks the refresh CTA */
@@ -21,13 +21,15 @@ interface ExpiredSignalBannerProps {
  * - Refresh button has a descriptive aria-label.
  */
 export function ExpiredSignalBanner({ onRefresh }: ExpiredSignalBannerProps) {
+  const prefersReduced = useReducedMotion();
+
   return (
     <motion.div
       role="status"
       aria-label="This signal has expired and is no longer actionable"
-      initial={{ opacity: 0, y: -4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      initial={prefersReduced ? { opacity: 0 } : { opacity: 0, y: -4 }}
+      animate={prefersReduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      transition={prefersReduced ? { duration: 0 } : { duration: 0.2 }}
       className="flex items-center justify-between gap-3 rounded-lg border border-accent-warning/40 bg-accent-warning/10 px-3 py-2 text-xs"
     >
       <div className="flex items-center gap-2 min-w-0">

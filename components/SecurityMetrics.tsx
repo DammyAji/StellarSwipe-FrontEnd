@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ShieldCheck, Lock, FileCheck2, Activity } from "lucide-react";
 
 const METRICS = [
@@ -39,16 +39,18 @@ const TRUST_POINTS = [
 ];
 
 export function SecurityMetrics() {
+  const prefersReduced = useReducedMotion();
+
   return (
     <section className="w-full max-w-5xl mx-auto px-4 py-16">
       <div className="flex flex-col md:flex-row gap-12 items-start">
         {/* Left — trust copy */}
         <motion.div
           className="flex-1 space-y-8"
-          initial={{ opacity: 0, x: -20 }}
-          whileInView={{ opacity: 1, x: 0 }}
+          initial={prefersReduced ? { opacity: 0 } : { opacity: 0, x: -20 }}
+          whileInView={prefersReduced ? { opacity: 1 } : { opacity: 1, x: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
+          transition={prefersReduced ? { duration: 0 } : { duration: 0.5 }}
         >
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-blue-500 mb-3">
@@ -84,10 +86,12 @@ export function SecurityMetrics() {
         {/* Right — stats card */}
         <motion.div
           className="flex-1 w-full"
-          initial={{ opacity: 0, x: 20 }}
-          whileInView={{ opacity: 1, x: 0 }}
+          initial={prefersReduced ? { opacity: 0 } : { opacity: 0, x: 20 }}
+          whileInView={prefersReduced ? { opacity: 1 } : { opacity: 1, x: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          transition={
+            prefersReduced ? { duration: 0 } : { duration: 0.5, delay: 0.1 }
+          }
         >
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-1">
             {/* Soroban badge */}

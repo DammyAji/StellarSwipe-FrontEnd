@@ -44,16 +44,37 @@ export function ColumnVisibilityControl<K extends string>({
 }: ColumnVisibilityControlProps<K>) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * #1071: every dismissal path (Escape, outside click, trigger toggle) returns
+   * focus to the trigger button. If the trigger is gone, fall back to the
+   * nearest focusable element in the surrounding container, then to the
+   * document body so focus never lands on a detached node.
+   */
+  function closeAndRestoreFocus() {
+    setOpen(false);
+    const trigger = triggerRef.current;
+    if (trigger && document.contains(trigger)) {
+      trigger.focus({ preventScroll: true });
+      return;
+    }
+    const nearby = containerRef.current?.querySelector<HTMLElement>(
+      "button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex='-1'])"
+    );
+    if (nearby) {
+      nearby.focus({ preventScroll: true });
+      return;
+    }
+    document.body.focus();
+  }
 
   // Close on Escape
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        setOpen(false);
-        containerRef.current
-          ?.querySelector<HTMLButtonElement>('[data-trigger="true"]')
-          ?.focus();
+        closeAndRestoreFocus();
       }
     }
     document.addEventListener("keydown", handleKey);

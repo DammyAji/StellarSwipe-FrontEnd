@@ -73,6 +73,8 @@ export function StakeBadge({
 
   function closePopover() {
     setPopoverOpen(false);
+    // #1071: return focus to the badge that opened the popover.
+    triggerRef.current?.focus();
   }
 
   // Dismiss on Escape and outside click
