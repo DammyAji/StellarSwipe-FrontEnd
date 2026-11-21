@@ -6,6 +6,10 @@ import { X, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AssetIssuerDetails } from "@/components/trade/AssetIssuerDetails";
+import {
+  StellarOperationList,
+  type SdkOperation,
+} from "@/components/trade/StellarOperationList";
 import { useWalletStore } from "@/store/useWalletStore";
 import { useRegisterActiveFlow } from "@/hooks/useActiveFlow";
 import type { TradeAssetInfo } from "@/lib/assetIssuer";
@@ -34,6 +38,18 @@ export interface TradeConfirmationDetails {
   toAsset?: Omit<TradeAssetInfo, "code">;
   /** Network the order will be submitted to. Defaults to the wallet store's network. */
   network?: string;
+  /**
+   * Raw SDK operation objects from the pending transaction (#1104).
+   * When provided, they are shown before the wallet signing prompt so users
+   * can review each operation's purpose, asset, and amount.
+   * Pass `undefined` to omit the section (e.g. for single-operation trades
+   * where the trade summary already shows the full picture).
+   */
+  operations?: SdkOperation[] | null;
+  /** True while operations are still being decoded from XDR. */
+  operationsLoading?: boolean;
+  /** Set when operations could not be decoded. */
+  operationsError?: string | null;
   /** Used to simulate a deliberate visual regression for testing */
   _visualRegressionTest?: boolean;
 }
@@ -70,6 +86,9 @@ export function TradeConfirmationModal({
     fromAsset,
     toAsset,
     network,
+    operations,
+    operationsLoading = false,
+    operationsError = null,
     _visualRegressionTest = false,
   } = details;
   const walletNetwork = useWalletStore((s) => s.network);
@@ -160,6 +179,17 @@ export function TradeConfirmationModal({
                 { label: "You receive", asset: { ...toAsset, code: toSymbol } },
               ]}
             />
+
+            {/* Transaction operations — shown when present so users can review
+                each operation before the wallet signs (#1104). The section is
+                omitted entirely when no data is provided (backward-compatible). */}
+            {(operations !== undefined || operationsLoading || operationsError) && (
+              <StellarOperationList
+                operations={operations}
+                loading={operationsLoading}
+                error={operationsError}
+              />
+            )}
 
             {/* Order details */}
             <section aria-labelledby="order-details-heading">
