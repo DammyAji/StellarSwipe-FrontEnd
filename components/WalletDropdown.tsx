@@ -409,22 +409,39 @@ export function WalletDropdown() {
             {copied ? "Copied!" : isCopyError ? "Retry" : "Copy address"}
           </button>
 
+          {/* Accessible status announcement for screen readers */}
+          <span role="status" aria-live="polite" className="sr-only">
+            {copied ? "Wallet address copied to clipboard" : ""}
+          </span>
+
           {/* Manual-copy fallback — only shown when clipboard API fails */}
           {isCopyError && copyError && (
             <div
               role="alert"
-              className="mx-2 flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/5 px-3 py-2 text-[11px] leading-snug text-yellow-700 dark:text-yellow-300"
+              className="mx-2 flex flex-col gap-1.5 rounded border border-yellow-500/20 bg-yellow-500/5 px-3 py-2 text-[11px] leading-snug text-yellow-700 dark:text-yellow-300"
             >
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="flex-1">{copyError}</span>
-              <button
-                type="button"
-                aria-label="Dismiss copy error"
-                onClick={resetCopy}
-                className="shrink-0 rounded p-0.5 hover:bg-yellow-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-500"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="flex-1">{copyError}</span>
+                <button
+                  type="button"
+                  aria-label="Dismiss copy error"
+                  onClick={resetCopy}
+                  className="shrink-0 rounded p-0.5 hover:bg-yellow-500/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-yellow-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              {publicKey && (
+                <input
+                  type="text"
+                  readOnly
+                  value={publicKey}
+                  aria-label="Wallet address to copy manually"
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full select-all rounded border border-yellow-500/30 bg-background px-1.5 py-1 font-mono text-[11px] text-foreground"
+                />
+              )}
             </div>
           )}
 

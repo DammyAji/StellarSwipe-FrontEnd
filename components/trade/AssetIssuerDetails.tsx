@@ -84,6 +84,7 @@ function AssetIssuerRow({
   const status = getIssuerStatus(asset);
   const issuer = asset.issuer?.trim() ?? "";
   const { copied, status: copyStatus, copy } = useClipboard();
+  const isCopyError = copyStatus === "error";
 
   return (
     <li
@@ -105,7 +106,7 @@ function AssetIssuerRow({
           {(status === "known" || status === "invalid") && (
             <>
               <span
-                className="truncate font-mono"
+                className="truncate font-mono select-all"
                 title={issuer}
                 aria-label={`Issuer address ${groupAddress(issuer)}`}
               >
@@ -115,14 +116,33 @@ function AssetIssuerRow({
                 type="button"
                 onClick={() => copy(issuer)}
                 className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`Copy ${asset.code} issuer address`}
+                aria-label={
+                  copied
+                    ? "Issuer address copied"
+                    : isCopyError
+                    ? "Copy failed — select the address to copy manually"
+                    : `Copy ${asset.code} issuer address`
+                }
               >
                 {copied ? (
                   <Check className="h-3 w-3 text-green-500" aria-hidden="true" />
+                ) : isCopyError ? (
+                  <AlertTriangle
+                    className="h-3 w-3 text-yellow-500"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <Copy className="h-3 w-3" aria-hidden="true" />
                 )}
               </button>
+              <span role="status" aria-live="polite" className="sr-only">
+                {copied ? "Issuer address copied to clipboard" : ""}
+              </span>
+              {isCopyError && (
+                <span role="alert" className="sr-only">
+                  Copy failed. Select the issuer address to copy it manually.
+                </span>
+              )}
             </>
           )}
           {status === "missing" && (

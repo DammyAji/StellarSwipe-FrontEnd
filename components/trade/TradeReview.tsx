@@ -60,7 +60,10 @@ export default function TradeReview({
   const canConfirm = !expired && !refreshing && activeQuote != null;
 
   return (
-    <section className="trade-review" aria-label="Trade review">
+    <section
+      className="trade-review flex flex-col gap-3 max-[900px]:landscape:gap-2"
+      aria-label="Trade review"
+    >
       <h2>Review trade</h2>
 
       <dl className="trade-review__summary">
@@ -103,7 +106,7 @@ export default function TradeReview({
         </div>
       ) : null}
 
-      <div className="trade-review__actions">
+      <div className="trade-review__actions flex flex-wrap gap-2 max-[900px]:landscape:flex-row-reverse max-[900px]:landscape:justify-start">
         <button
           type="button"
           onClick={() => activeQuote && onConfirm(activeQuote)}

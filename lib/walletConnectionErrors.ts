@@ -74,3 +74,22 @@ export function classifyWalletConnectionError(
     i18nKey: `wallet.connect_error.${reason}`,
   };
 }
+
+/**
+ * Maps a classified reason onto the recovery modal's reason union.
+ * `user_rejected` is surfaced as a toast only, so it maps to `null`.
+ */
+export function toConnectErrorReason(
+  reason: WalletConnectionReason,
+): "not_found" | "timeout" | "error" | null {
+  switch (reason) {
+    case "wallet_not_found":
+      return "not_found";
+    case "timeout":
+      return "timeout";
+    case "user_rejected":
+      return null;
+    default:
+      return "error";
+  }
+}

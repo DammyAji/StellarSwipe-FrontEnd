@@ -95,9 +95,15 @@ export function TradeConfirmationModal({
             "fixed bottom-0 left-0 right-0 z-50",
             "flex max-h-[90dvh] flex-col",
             "rounded-t-2xl bg-background shadow-2xl outline-none",
+            // Short landscape viewports (phones rotated): keep the sheet
+            // inside the viewport so the footer action never overlaps the
+            // fee/risk rows, which stay reachable via the scrollable body.
+            "max-[900px]:landscape:max-h-[100dvh]",
+            "max-[900px]:landscape:rounded-none",
             "sm:bottom-auto sm:left-1/2 sm:top-1/2",
             "sm:-translate-x-1/2 sm:-translate-y-1/2",
-            "sm:w-full sm:max-w-md sm:max-h-[85vh] sm:rounded-2xl"
+            "sm:w-full sm:max-w-md sm:max-h-[85vh] sm:rounded-2xl",
+            "sm:landscape:max-h-[calc(100dvh-1rem)]"
           )}
         >
           <p id="trade-confirm-desc" className="sr-only">
@@ -105,15 +111,12 @@ export function TradeConfirmationModal({
           </p>
 
           {/* Mobile drag handle */}
-          <div
-            className="flex justify-center pt-3 pb-1 sm:hidden"
-            aria-hidden="true"
-          >
+          <div className="flex justify-center pt-3 pb-1 sm:hidden max-[900px]:landscape:hidden" aria-hidden="true">
             <div className="h-1 w-10 rounded-full bg-border" />
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 max-[900px]:landscape:py-2">
             <Dialog.Title className="text-lg font-semibold">
               Confirm {orderType === "limit" ? "Limit" : "Market"} Order
             </Dialog.Title>
@@ -130,7 +133,7 @@ export function TradeConfirmationModal({
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 sm:px-6 space-y-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-2 sm:px-6 space-y-4 max-[900px]:landscape:space-y-3 max-[900px]:landscape:pb-3">
             {/* Trade summary */}
             <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -223,15 +226,15 @@ export function TradeConfirmationModal({
               </p>
             </div>
 
-            <div className="h-4" aria-hidden="true" />
+            <div className="h-4 max-[900px]:landscape:hidden" aria-hidden="true" />
           </div>
 
           {/* Footer */}
-          <div className="border-t bg-background px-4 pb-6 pt-3 sm:px-6 sm:pb-4">
+          <div className="border-t bg-background px-4 pb-6 pt-3 sm:px-6 sm:pb-4 max-[900px]:landscape:pb-3 max-[900px]:landscape:pt-2">
             <Button
               onClick={onConfirm}
               disabled={isSubmitting}
-              className="h-12 w-full text-base font-semibold sm:h-11"
+              className="h-12 w-full text-base font-semibold sm:h-11 max-[900px]:landscape:h-10"
             >
               {isSubmitting
                 ? "Submitting…"

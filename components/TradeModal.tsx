@@ -24,6 +24,7 @@ import { SlippageWarning } from "@/components/SlippageWarning";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { validateTradeField } from "@/lib/tradeSchemas";
 import { useNetworkMismatch } from "@/components/NetworkMismatchBanner";
+import { NetworkSwitchDialog } from "@/components/NetworkSwitchDialog";
 import { GlossaryTerm } from "@/components/GlossaryTerm";
 
 function truncateKey(key: string) {
@@ -174,6 +175,10 @@ export function TradeModal({
   const [quoteError, setQuoteError] = useState<string | null>(null);
   // Clock for the quote countdown; only ticks while a quote with expiry is shown
   const [now, setNow] = useState(() => Date.now());
+  // Prerequisite actions (#1075): connect a wallet / switch network without
+  // losing the order the user is reviewing.
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [switchTarget, setSwitchTarget] = useState<string | null>(null);
   const { isDemoMode } = useDemoModeStore();
   const walletPublicKey = useWalletStore((s) => s.publicKey);
   const walletNetworkDraft = useWalletStore((s) => s.network);
@@ -269,6 +274,12 @@ export function TradeModal({
     networkMismatch ||
     !walletReady;
 
+  // Prerequisites that must be met before the order can be reviewed (#1075).
+  // The review step is only reachable once both are satisfied, so the user is
+  // never asked to confirm an order they cannot sign.
+  const prerequisitesMet = walletReady && !networkMismatch;
+  const reviewDisabled = disabled || !prerequisitesMet;
+
   // Reset form state when modal opens
   useEffect(() => {
     if (open) {
@@ -332,6 +343,8 @@ export function TradeModal({
   // Switching or disconnecting the wallet invalidates the review: the order was
   // reviewed against the previous account, so send the user back to the input step.
   // Skipped while submitting so an in-flight confirm is not interrupted.
+  // The entered order is kept, so returning after connecting/switching lands
+  // back on the same order (#1075).
   const walletKeyRef = useRef(walletKey);
   useEffect(() => {
     if (walletKeyRef.current === walletKey) return;
@@ -340,6 +353,16 @@ export function TradeModal({
     setSlippageAcknowledged(false);
     setConfirmError(null);
   }, [walletKey]);
+
+  // A network switch also invalidates the review (the order was priced on the
+  // previous network); keep the entered order and return to the input step.
+  const networkRef = useRef(walletNetwork);
+  useEffect(() => {
+    if (networkRef.current === walletNetwork) return;
+    networkRef.current = walletNetwork;
+    setStep((s) => (s === "review" ? "input" : s));
+    setConfirmError(null);
+  }, [walletNetwork]);
 
   // Keyboard shortcuts: Escape → close, Enter (outside interactive elements) → confirm
   useEffect(() => {

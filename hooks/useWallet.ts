@@ -15,6 +15,10 @@ import { traceWorker } from "@/src/tracing/worker-tracing.service";
 import analyticsService from "@/services/analytics";
 import { AUDIT_ACTIONS, recordAuditEntry } from "@/services/auditTrail";
 import type { WalletConnectErrorReason } from "@/components/WalletConnectErrorModal";
+import {
+  classifyWalletConnectionError,
+  toConnectErrorReason,
+} from "@/lib/walletConnectionErrors";
 import * as Sentry from "@sentry/nextjs";
 
 const CONNECT_TIMEOUT_MS = 20000;
@@ -56,6 +60,18 @@ function isUserRejection(err: unknown): boolean {
   );
 }
 
+/**
+ * Classifies a connection failure into a recovery reason (#1076).
+ * User rejection is toast-only; every other reason opens the recovery modal.
+ */
+function resolveConnectError(err: unknown): {
+  reason: WalletConnectErrorReason;
+  info: ReturnType<typeof classifyWalletConnectionError>;
+} {
+  const info = classifyWalletConnectionError(err);
+  return { reason: toConnectErrorReason(info.reason), info };
+}
+
 export function useWallet() {
   const {
     publicKey,
@@ -88,7 +104,7 @@ export function useWallet() {
         setConnectError("not_found");
         analyticsService.track("wallet_connect_failed", {
           wallet_type: "freighter",
-          reason: "not_found",
+          reason: "wallet_not_found",
         });
         return;
       }
@@ -105,29 +121,29 @@ export function useWallet() {
         new CustomEvent("wallet-connected", { detail: { publicKey: key } })
       );
     } catch (err) {
-      if (isUserRejection(err)) {
+      const { reason, info } = resolveConnectError(err);
+      if (info.reason === "user_rejected") {
         walletToast.denied();
         analyticsService.track("wallet_connect_failed", {
           wallet_type: "freighter",
           reason: "user_rejected",
         });
-      } else if (isTimeout(err)) {
+      } else if (info.reason === "timeout") {
         walletToast.timeout();
-        setConnectError("timeout");
+        setConnectError(reason);
         analyticsService.track("wallet_connect_failed", {
           wallet_type: "freighter",
           reason: "timeout",
         });
       } else {
         walletToast.connectError();
-        setConnectError("error");
+        setConnectError(reason);
         Sentry.captureException(err);
         analyticsService.track("wallet_connect_failed", {
           wallet_type: "freighter",
-          reason: "error",
+          reason: info.reason,
         });
-      }
-    } finally {
+      }    } finally {
       setIsConnecting(false);
     }
   }
@@ -207,14 +223,15 @@ export function useWallet() {
         new CustomEvent("wallet-connected", { detail: { publicKey: key } })
       );
     } catch (err) {
-      if (isUserRejection(err)) {
+      const { reason, info } = resolveConnectError(err);
+      if (info.reason === "user_rejected") {
         walletToast.denied();
-      } else if (isTimeout(err)) {
+      } else if (info.reason === "timeout") {
         walletToast.timeout();
-        setConnectError("timeout");
+        setConnectError(reason);
       } else {
         walletToast.connectError();
-        setConnectError("error");
+        setConnectError(reason);
         Sentry.captureException(err);
       }
     } finally {
