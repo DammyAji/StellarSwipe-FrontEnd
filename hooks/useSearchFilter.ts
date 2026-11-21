@@ -35,6 +35,8 @@ export interface UseSearchFilterResult {
   hasActiveFilters: boolean;
   /** The fully-filtered, sorted signal list */
   filteredSignals: Signal[];
+  /** Stable signature of every active filter — changes whenever the query changes */
+  querySignature: string;
 }
 
 /**
@@ -201,6 +203,18 @@ export function useSearchFilter({
     followedOnly ||
     searchValue.trim() !== "";
 
+  // #1034: a single string that changes whenever the effective query changes,
+  // so consumers can reset saved feed state without deep-comparing filters.
+  const querySignature = [
+    direction,
+    asset,
+    provider,
+    debouncedSearch,
+    bookmarkedOnly ? "1" : "0",
+    followedOnly ? "1" : "0",
+    sortOrder,
+  ].join("|");
+
   return {
     searchValue,
     setSearchValue,
@@ -208,5 +222,6 @@ export function useSearchFilter({
     filteredCount: filteredSignals.length,
     hasActiveFilters,
     filteredSignals,
+    querySignature,
   };
 }

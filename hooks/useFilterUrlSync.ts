@@ -43,23 +43,54 @@ const DEFAULTS: FilterValues = {
   sortOrder: "latest",
 };
 
+/** Maximum length kept for free-text parameters (asset / provider search). */
+const MAX_TEXT_LENGTH = 120;
+
+function readText(params: URLSearchParams, name: string): string {
+  return (params.get(name) ?? "").trim().slice(0, MAX_TEXT_LENGTH);
+}
+
 /** Parses supported filters from a query string, ignoring invalid values. */
 export function parseFilterParams(search: string): FilterValues {
   const params = new URLSearchParams(search);
   const dir = params.get(FILTER_PARAMS.direction)?.toUpperCase();
-  const sort = params.get(FILTER_PARAMS.sortOrder);
+  const sort = params.get(FILTER_PARAMS.sortOrder)?.toLowerCase();
   return {
     direction: DIRECTIONS.includes(dir as FilterDirection)
       ? (dir as FilterDirection)
       : DEFAULTS.direction,
-    asset: params.get(FILTER_PARAMS.asset) ?? DEFAULTS.asset,
-    provider: params.get(FILTER_PARAMS.provider) ?? DEFAULTS.provider,
+    asset: readText(params, FILTER_PARAMS.asset),
+    provider: readText(params, FILTER_PARAMS.provider),
     bookmarkedOnly: params.get(FILTER_PARAMS.bookmarkedOnly) === "1",
     followedOnly: params.get(FILTER_PARAMS.followedOnly) === "1",
     sortOrder: SORT_ORDERS.includes(sort as FeedSortOrder)
       ? (sort as FeedSortOrder)
       : DEFAULTS.sortOrder,
   };
+}
+
+/**
+ * Removes filter parameters that hold unsupported values so a shared link
+ * with bad input is cleaned up instead of silently ignored.
+ */
+export function stripInvalidFilterParams(search: string): string {
+  const params = new URLSearchParams(search);
+  const dir = params.get(FILTER_PARAMS.direction);
+  if (dir !== null && !DIRECTIONS.includes(dir.toUpperCase() as FilterDirection)) {
+    params.delete(FILTER_PARAMS.direction);
+  }
+  const sort = params.get(FILTER_PARAMS.sortOrder);
+  if (sort !== null && !SORT_ORDERS.includes(sort.toLowerCase() as FeedSortOrder)) {
+    params.delete(FILTER_PARAMS.sortOrder);
+  }
+  (["bookmarkedOnly", "followedOnly"] as const).forEach((key) => {
+    const value = params.get(FILTER_PARAMS[key]);
+    if (value !== null && value !== "1" && value !== "0") {
+      params.delete(FILTER_PARAMS[key]);
+    }
+  });
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 /**
@@ -104,7 +135,8 @@ function pickFilters(state: FilterValues): FilterValues {
  * - On mount, filters present in the URL override persisted filters.
  * - Discrete filter changes push a history entry; free-text changes replace
  *   the current entry so typing doesn't flood the history stack.
- * - popstate re-applies filters from the URL.
+ * - popstate / pageshow re-apply filters from the URL.
+ * - Unsupported parameter values are dropped from the URL on load.
  */
 export function useFilterUrlSync() {
   const applyingFromUrl = useRef(false);
@@ -114,6 +146,15 @@ export function useFilterUrlSync() {
       applyingFromUrl.current = true;
       useSignalFilterStore.setState(parseFilterParams(window.location.search));
       applyingFromUrl.current = false;
+      // Drop unsupported values so the URL matches what is actually applied.
+      const cleaned = stripInvalidFilterParams(window.location.search);
+      if (cleaned !== window.location.search) {
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${cleaned}${window.location.hash}`
+        );
+      }
     };
 
     const hasFilterParams = Object.values(FILTER_PARAMS).some((name) =>
@@ -146,7 +187,9 @@ export function useFilterUrlSync() {
       const url = `${window.location.pathname}${next}${window.location.hash}`;
       const textOnly =
         state.direction === prev.direction &&
+        state.asset === prev.asset &&
         state.bookmarkedOnly === prev.bookmarkedOnly &&
+        state.followedOnly === prev.followedOnly &&
         state.sortOrder === prev.sortOrder;
       if (textOnly) {
         window.history.replaceState(window.history.state, "", url);
@@ -156,9 +199,12 @@ export function useFilterUrlSync() {
     });
 
     window.addEventListener("popstate", applyFromUrl);
+    // Back/forward cache restores the page without firing popstate.
+    window.addEventListener("pageshow", applyFromUrl);
     return () => {
       unsubscribe();
       window.removeEventListener("popstate", applyFromUrl);
+      window.removeEventListener("pageshow", applyFromUrl);
     };
   }, []);
 }

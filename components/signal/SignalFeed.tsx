@@ -11,10 +11,11 @@ import { SignalFeedFilters } from "@/components/SignalFeedFilters";
 import { SignalSortControls } from "@/components/SignalSortControls";
 import { SignalFilterBottomSheet } from "@/components/SignalFilterBottomSheet";
 import { PricePrecisionToggle } from "@/components/PricePrecisionToggle";
-import { FeedDensityToggle } from "@/components/FeedDensityToggle";
+import { FeedDensityToggle, FeedLayoutToggle } from "@/components/FeedDensityToggle";
 import { useFeedDensityStore } from "@/store/useFeedDensityStore";
 import { ExpiredSignalBanner } from "@/components/ExpiredSignalBanner";
 import { useSignalFilterStore } from "@/store/useSignalFilterStore";
+import { useToastStore } from "@/store/useToastStore";
 import { useFollowedProvidersStore } from "@/store/useFollowedProvidersStore";
 import { useRecentlyViewedStore } from "@/store/useRecentlyViewedStore";
 import { useSnoozeStore } from "@/store/useSnoozeStore";
@@ -55,6 +56,8 @@ const PAGE_SIZE = 10;
 const DESKTOP_BREAKPOINT = "(min-width: 1024px)";
 const MIN_LIST_PANE_WIDTH = 320;
 const MIN_DETAIL_PANE_WIDTH = 340;
+/** #1034: sessionStorage key holding the feed's saved scroll offset */
+const FEED_POSITION_STORAGE_KEY = "signal-feed-scroll-position";
 
 interface SignalFeedProps {
   /** Server-fetched first page — eliminates the client waterfall on initial load */
@@ -83,6 +86,8 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
   } = useSignalFilterStore();
   const followedProviders = useFollowedProvidersStore((s) => s.followedProviders);
   const density = useFeedDensityStore((s) => s.density);
+  // #1033: card vs list presentation, persisted across navigation and reloads.
+  const layout = useFeedDensityStore((s) => s.layout);
   const pruneExpiredSnoozes = useSnoozeStore((state) => state.pruneExpired);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const { addView } = useRecentlyViewedStore();
@@ -104,9 +109,9 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
     if (!container) return;
     const height = container.clientHeight;
     setFeedHeight(height);
-    const rowHeight = density === "compact" ? 180 : 280;
+    const rowHeight = layout === "list" ? 96 : density === "compact" ? 180 : 280;
     setViewportCount(Math.max(1, Math.ceil(height / rowHeight)));
-  }, [density]);
+  }, [density, layout]);
 
   const {
     data,
@@ -179,7 +184,22 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
     filteredSignals: signals,
     filteredCount,
     hasActiveFilters,
+    querySignature,
   } = useSearchFilter({ signals: activeSignals, snoozeTick });
+
+  // #1036: one-action reset for every non-default feed filter.
+  const enqueueToast = useToastStore((s) => s.enqueue);
+  const handleResetFilters = useCallback(() => {
+    resetFilters();
+    clearSearch();
+    enqueueToast({
+      tone: "info",
+      title: "Filters reset",
+      description: "Showing the default signal feed.",
+      duration: 4000,
+    });
+    refetch();
+  }, [resetFilters, clearSearch, enqueueToast, refetch]);
 
   const selectedSignal = useMemo(
     () => signals.find((signal) => signal.id === selectedSignalId) ?? null,
@@ -220,7 +240,7 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
   // Virtual row configuration - estimate height based on typical signal card
-  const estimatedRowHeight = 280;
+  const estimatedRowHeight = layout === "list" ? 96 : 280;
 
   const virtualizer = useVirtualizer({
     count: signals.length,
@@ -233,6 +253,12 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
       [signals]
     ),
   });
+
+  // #1033: re-measure rows when the presentation changes so list rows collapse
+  // to their real height instead of keeping the card estimate.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [layout, density, virtualizer]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const syncStatus = useSyncStatus(isFetching);
@@ -345,22 +371,10 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
     const container = parentRef.current;
     if (!container) return;
 
-    // Restore scroll position from sessionStorage
-    const STORAGE_KEY = "signal-feed-scroll-position";
-    try {
-      const savedPosition = sessionStorage.getItem(STORAGE_KEY);
-      if (savedPosition) {
-        const position = parseInt(savedPosition, 10);
-        container.scrollTop = position;
-      }
-    } catch (e) {
-      // Ignore storage errors
-    }
-
     // Save scroll position on unmount
     const handleScroll = () => {
       try {
-        sessionStorage.setItem(STORAGE_KEY, container.scrollTop.toString());
+        sessionStorage.setItem(FEED_POSITION_STORAGE_KEY, container.scrollTop.toString());
       } catch (e) {
         // Ignore storage errors
       }
@@ -371,12 +385,56 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
       container.removeEventListener("scroll", handleScroll);
       // Save final position on unmount
       try {
-        sessionStorage.setItem(STORAGE_KEY, container.scrollTop.toString());
+        sessionStorage.setItem(FEED_POSITION_STORAGE_KEY, container.scrollTop.toString());
       } catch (e) {
         // Ignore storage errors
       }
     };
   }, []);
+
+  // #1034: remember which query the saved position belongs to, so a query
+  // change starts the feed from the top instead of restoring a stale offset.
+  const lastQuerySignatureRef = useRef(querySignature);
+  useEffect(() => {
+    if (lastQuerySignatureRef.current === querySignature) return;
+    lastQuerySignatureRef.current = querySignature;
+    try {
+      sessionStorage.removeItem(FEED_POSITION_STORAGE_KEY);
+    } catch (e) {
+      // Ignore storage errors
+    }
+    const container = parentRef.current;
+    if (container) container.scrollTop = 0;
+  }, [querySignature]);
+
+  // #1034: restore the saved offset once the virtualized list has rendered
+  // enough rows to make that offset reachable. Focus is never moved here.
+  const restoredPositionRef = useRef(false);
+  useEffect(() => {
+    if (restoredPositionRef.current) return;
+    const container = parentRef.current;
+    if (!container || signals.length === 0) return;
+
+    let savedPosition = 0;
+    try {
+      savedPosition = parseInt(
+        sessionStorage.getItem(FEED_POSITION_STORAGE_KEY) ?? "0",
+        10
+      );
+    } catch (e) {
+      savedPosition = 0;
+    }
+    if (!Number.isFinite(savedPosition) || savedPosition <= 0) {
+      restoredPositionRef.current = true;
+      return;
+    }
+
+    // Wait until the virtualizer has measured enough rows to reach the offset.
+    if (container.scrollHeight - container.clientHeight < savedPosition) return;
+
+    container.scrollTop = savedPosition;
+    restoredPositionRef.current = true;
+  }, [signals.length, virtualizer, hasNextPage, isFetchingNextPage, loadMore]);
 
   // #321: periodically drop expired snoozes so snoozed signals are
   // automatically returned to the feed once their snooze period elapses.
@@ -449,10 +507,22 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
             <PricePrecisionToggle />
             {/* Density toggle — persisted across sessions */}
             <FeedDensityToggle />
+            {/* #1033: card/list layout toggle — persisted across sessions */}
+            <FeedLayoutToggle />
           </div>
           {/* #574: last-updated / stale status, with a manual refresh action */}
           <div className="flex items-center gap-2">
             <SyncStatusIndicator status={syncStatus} />
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                aria-label="Reset all signal filters to defaults"
+                className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-[11px] font-medium text-sky-200 transition-colors hover:border-sky-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              >
+                Reset filters
+              </button>
+            )}
             <button
               type="button"
               onClick={() => refetch()}
@@ -676,7 +746,7 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
                 <SignalEmptyState
                   variant={hasActiveFilters ? "no-results" : "no-signals"}
                   onRefresh={() => refetch()}
-                  onClearFilters={hasActiveFilters ? resetFilters : undefined}
+                  onClearFilters={hasActiveFilters ? handleResetFilters : undefined}
                 />
               )
             ) : (
@@ -723,10 +793,15 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
                           isExpired ? ", expired" : ""
                         }. Use arrow keys to navigate between signals.`}
                         data-density={density}
-                        className={`rounded-3xl border border-white/10 bg-slate-950/90 shadow-sm shadow-slate-950/20 transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
-                          density === "compact"
-                            ? "p-2 sm:p-3 mb-2"
-                            : "p-4 sm:p-6 mb-4"
+                        data-layout={layout}
+                        className={`border border-white/10 bg-slate-950/90 shadow-sm shadow-slate-950/20 transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                          layout === "list"
+                            ? "mb-2 rounded-xl p-3 sm:p-4"
+                            : `rounded-3xl ${
+                                density === "compact"
+                                  ? "p-2 sm:p-3 mb-2"
+                                  : "p-4 sm:p-6 mb-4"
+                              }`
                         }`}
                       >
                         {isExpired && (
@@ -757,7 +832,11 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
                         >
                           <div
                             className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${
-                              density === "compact" ? "gap-2" : "gap-4"
+                              layout === "list"
+                                ? "gap-2"
+                                : density === "compact"
+                                ? "gap-2"
+                                : "gap-4"
                             }`}
                           >
                             <div>
@@ -805,7 +884,11 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
                           </div>
                           <p
                             className={`text-sm leading-6 text-foreground-muted ${
-                              density === "compact" ? "mt-2" : "mt-4"
+                              layout === "list"
+                                ? "mt-2 line-clamp-2"
+                                : density === "compact"
+                                ? "mt-2"
+                                : "mt-4"
                             }`}
                           >
                             {signal.details}
