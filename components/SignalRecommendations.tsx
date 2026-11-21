@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { ThumbsUp, ThumbsDown, Sparkles } from "lucide-react";
 import { useRecommendationStore } from "@/store/useRecommendationStore";
+import { MarketContextChangeIndicator } from "@/components/MarketContextChangeIndicator";
+import type { MarketContextSnapshot } from "@/lib/marketContextChange";
 import {
   computeRecommendations,
   recordExplicitFeedback,
@@ -13,6 +15,8 @@ import type { Signal } from "@/lib/api-types.generated";
 interface SignalRecommendationsProps {
   signals: Signal[];
   onSelectSignal?: (signal: Signal) => void;
+  /** Current quote comparisons keyed by signal ID; absent entries are explicitly unavailable. */
+  marketContextBySignalId?: Record<string, MarketContextSnapshot>;
 }
 
 /**
@@ -21,6 +25,7 @@ interface SignalRecommendationsProps {
 export function SignalRecommendations({
   signals,
   onSelectSignal,
+  marketContextBySignalId = {},
 }: SignalRecommendationsProps) {
   const { settings, recommendations, feedback, setRecommendations } =
     useRecommendationStore();
@@ -83,13 +88,21 @@ export function SignalRecommendations({
               key={rec.signalId}
               className="shrink-0 rounded-xl border bg-card p-3 w-52 space-y-1.5 cursor-pointer hover:border-blue-500 transition-colors"
               onClick={() => onSelectSignal?.(signal)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && onSelectSignal?.(signal)}
-              aria-label={`Recommended: ${signal.ticker} ${signal.action}`}
+              role="group"
+              aria-label={`Recommendation: ${signal.ticker} ${signal.action}`}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm">{signal.ticker}</span>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectSignal?.(signal);
+                  }}
+                  className="rounded font-semibold text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`View recommendation: ${signal.ticker} ${signal.action}`}
+                >
+                  {signal.ticker}
+                </button>
                 <span
                   className={`text-xs font-medium px-1.5 py-0.5 rounded ${
                     signal.action === "BUY"
@@ -105,6 +118,10 @@ export function SignalRecommendations({
                 Score:{" "}
                 <span className="font-medium text-foreground">{rec.score}</span>
               </div>
+
+              <MarketContextChangeIndicator
+                context={marketContextBySignalId[rec.signalId]}
+              />
 
               {/* Reasons with link to factors page */}
               <div className="space-y-0.5">

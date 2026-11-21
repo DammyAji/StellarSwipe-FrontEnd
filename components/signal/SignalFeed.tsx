@@ -45,6 +45,7 @@ import {
 import { deriveSignalFeedLoading, buildShimmerDelays } from "@/lib/signalFeedLoading";
 import { findNewSinceDividerIndex } from "@/lib/signalFeedNewSince";
 import { PriceAlertForm } from "@/components/watchlist/PriceAlertForm";
+import { SignalRecommendations } from "@/components/SignalRecommendations";
 
 interface SignalResponse {
   items: Signal[];
@@ -574,6 +575,13 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
               : "Scroll down to load more."}
           </div>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <SignalRecommendations
+          signals={signals}
+          onSelectSignal={(signal) => setSelectedSignalId(signal.id)}
+        />
       </div>
 
       {/* #657: Search bar — prominent, sticky, with Cmd/Ctrl+K shortcut hint */}
