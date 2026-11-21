@@ -67,6 +67,7 @@ export function useWallet() {
     disconnect,
     setActiveWallet,
     disconnectAll,
+    setWalletNickname,
   } = useWalletStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
@@ -248,6 +249,7 @@ export function useWallet() {
     connect,
     connectAnother,
     switchWallet,
+    setWalletNickname,
     disconnect: disconnectWallet,
     disconnectAll: disconnectAllWallets,
     sign,

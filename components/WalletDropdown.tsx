@@ -12,6 +12,7 @@ import {
   Copy,
   Loader2,
   LogOut,
+  Pencil,
   PlusCircle,
   RefreshCw,
   UserCircle2,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClipboard } from "@/hooks/useClipboard";
+import { NICKNAME_MAX_LENGTH, normalizeNickname } from "@/store/useWalletStore";
 
 function truncate(key: string) {
   return `${key.slice(0, 6)}...${key.slice(-4)}`;
@@ -30,6 +32,7 @@ export function WalletDropdown() {
     wallets,
     activePublicKey,
     switchWallet,
+    setWalletNickname,
     connectAnother,
     disconnect,
     disconnectAll,
@@ -45,11 +48,45 @@ export function WalletDropdown() {
   // Account switcher state
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  // Nickname editor state — one wallet at a time.
+  const [editingNicknameFor, setEditingNicknameFor] = useState<string | null>(null);
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const truncated = publicKey ? truncate(publicKey) : "";
+  const activeNickname =
+    wallets.find((w) => w.publicKey === activePublicKey)?.nickname ?? null;
+
+  function startEditingNickname(key: string, current?: string) {
+    setEditingNicknameFor(key);
+    setNicknameDraft(current ?? "");
+    setNicknameError(null);
+    requestAnimationFrame(() => nicknameInputRef.current?.focus());
+  }
+
+  function cancelEditingNickname() {
+    setEditingNicknameFor(null);
+    setNicknameDraft("");
+    setNicknameError(null);
+  }
+
+  function saveNickname(key: string) {
+    const normalized = normalizeNickname(nicknameDraft);
+    if (nicknameDraft.trim().length > 0 && !normalized) {
+      setNicknameError("Enter a nickname or clear the field to remove it.");
+      return;
+    }
+    try {
+      setWalletNickname(key, nicknameDraft);
+      cancelEditingNickname();
+    } catch {
+      setNicknameError("Could not save nickname. Please try again.");
+    }
+  }
 
   const handleCopy = useCallback(async () => {
     if (!publicKey) return;
@@ -158,7 +195,7 @@ export function WalletDropdown() {
           switchingTo
             ? "Switching wallet account…"
             : publicKey
-            ? `Wallet menu for ${truncated}`
+            ? `Wallet menu for ${activeNickname ? `${activeNickname}, ` : ""}${truncated}`
             : "Wallet menu"
         }
         className="font-mono gap-2"
@@ -178,6 +215,11 @@ export function WalletDropdown() {
           />
         </span>
         <span className="max-w-[9rem] truncate sm:max-w-none">{truncated}</span>
+        {activeNickname && (
+          <span className="max-w-[7rem] truncate font-sans text-xs text-muted-foreground">
+            {activeNickname}
+          </span>
+        )}
         {switchingTo && (
           <span className="hidden text-[10px] font-sans text-yellow-600 dark:text-yellow-300 sm:inline">
             Switching…

@@ -13,6 +13,11 @@ export interface PortfolioAsset {
   unrealizedPnL?: number;
   quotePrice?: number;
   quoteLastUpdated?: Date;
+  /**
+   * Wallet that holds this asset. Undefined means the holding's wallet is not
+   * known — it must never be attributed to a wallet as fact.
+   */
+  walletAddress?: string;
 }
 
 export interface PortfolioState {

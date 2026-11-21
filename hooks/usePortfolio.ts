@@ -5,11 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useWallet } from "@/hooks/useWallet";
 import { usePortfolioStore, type PortfolioAsset } from "@/store/usePortfolioStore";
 function withPercentages(
-  assets: Omit<PortfolioAsset, "percentage">[]
+  assets: Omit<PortfolioAsset, "percentage">[],
+  walletAddress?: string
 ): PortfolioAsset[] {
   const total = assets.reduce((sum, a) => sum + a.value, 0);
   return assets.map((a) => ({
     ...a,
+    // Only attribute holdings to a wallet when the wallet is actually known.
+    walletAddress: a.walletAddress ?? walletAddress,
     percentage: total > 0 ? Math.round((a.value / total) * 1000) / 10 : 0,
   }));
 }
