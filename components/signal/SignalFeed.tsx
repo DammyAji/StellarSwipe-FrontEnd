@@ -18,6 +18,7 @@ import { useSignalFilterStore } from "@/store/useSignalFilterStore";
 import { useToastStore } from "@/store/useToastStore";
 import { useFollowedProvidersStore } from "@/store/useFollowedProvidersStore";
 import { useRecentlyViewedStore } from "@/store/useRecentlyViewedStore";
+import { useFeedVisitStore } from "@/store/useFeedVisitStore";
 import { useSnoozeStore } from "@/store/useSnoozeStore";
 import { useSignalExpiryStore } from "@/store/useSignalExpiryStore";
 import { useSignalExpiryWorker } from "@/hooks/useSignalExpiryWorker";
@@ -42,6 +43,7 @@ import {
   computeSplitRatioFromClientX,
 } from "@/lib/splitView";
 import { deriveSignalFeedLoading, buildShimmerDelays } from "@/lib/signalFeedLoading";
+import { findNewSinceDividerIndex } from "@/lib/signalFeedNewSince";
 import { PriceAlertForm } from "@/components/watchlist/PriceAlertForm";
 
 interface SignalResponse {
@@ -91,6 +93,9 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
   const pruneExpiredSnoozes = useSnoozeStore((state) => state.pruneExpired);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const { addView } = useRecentlyViewedStore();
+  // #1089: boundary between signals seen on a previous visit and new ones.
+  const lastVisitAt = useFeedVisitStore((s) => s.lastVisitAt);
+  const startVisit = useFeedVisitStore((s) => s.startVisit);
   // Bumped on a timer so expired snoozes are re-evaluated and signals return.
   const [snoozeTick, setSnoozeTick] = useState(0);
 
@@ -235,6 +240,22 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
   const shimmerDelays = useMemo(
     () => buildShimmerDelays(feedLoadingState.skeletonCount),
     [feedLoadingState.skeletonCount]
+  );
+
+  // #1089: the divider is computed from the boundary captured when this visit
+  // started, so it stays stable while the user browses and only moves on the
+  // next visit.
+  const [visitBoundary, setVisitBoundary] = useState<string | null>(null);
+
+  useEffect(() => {
+    const previousVisit = useFeedVisitStore.getState().lastVisitAt;
+    setVisitBoundary(previousVisit);
+    startVisit();
+  }, [startVisit]);
+
+  const newSinceIndex = useMemo(
+    () => findNewSinceDividerIndex(signals, visitBoundary),
+    [signals, visitBoundary]
   );
 
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);

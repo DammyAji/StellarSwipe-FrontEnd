@@ -27,6 +27,8 @@ interface SignalFilterState {
   provider: string;
   bookmarkedOnly: boolean;
   followedOnly: boolean;
+  /** Minimum provider track-record length in days; null = no threshold */
+  minTrackRecordDays: number | null;
   sortOrder: FeedSortOrder;
   presets: FilterPreset[];
   _hasHydrated: boolean;
@@ -36,6 +38,7 @@ interface SignalFilterState {
   setProvider: (p: string) => void;
   setBookmarkedOnly: (selected: boolean) => void;
   setFollowedOnly: (selected: boolean) => void;
+  setMinTrackRecordDays: (days: number | null) => void;
   setSortOrder: (o: FeedSortOrder) => void;
   savePreset: (name: string) => void;
   applyPreset: (name: string) => void;

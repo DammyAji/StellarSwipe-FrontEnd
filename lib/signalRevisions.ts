@@ -24,6 +24,15 @@ export const SIGNAL_REVISION_FIELDS = [
 
 export type SignalRevisionField = (typeof SIGNAL_REVISION_FIELDS)[number];
 
+/** Human-readable labels for revision fields, used by the UI. */
+export const SIGNAL_REVISION_FIELD_LABELS: Record<SignalRevisionField, string> = {
+  ticker: "Pair",
+  action: "Action",
+  confidence: "Confidence",
+  details: "Details",
+  expiresAt: "Expiry",
+};
+
 /** Provider-editable content of a signal. */
 export interface SignalRevisionContent {
   readonly ticker: string;

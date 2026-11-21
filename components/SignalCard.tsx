@@ -38,6 +38,10 @@ import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { useSignalPrice } from "@/hooks/useSignalPrice";
 import { toast } from "sonner";
 import type { Signal as ApiSignal } from "@/lib/api";
+import {
+  SIGNAL_REVISION_FIELD_LABELS,
+  type SignalRevisionField,
+} from "@/lib/signalRevisions";
 
 interface ROIPoint {
   value: number;
@@ -146,6 +150,22 @@ export function SignalCard({
     : null;
   const hasSignalRevision = signalData?.hasRevision ?? false;
   const signalQuote = signalData?.quote;
+  const signalRevision = signalData?.revision;
+  const changedFields = signalData?.changedFields ?? [];
+  const changedFieldLabels = changedFields.map(
+    (field) => SIGNAL_REVISION_FIELD_LABELS[field] ?? field
+  );
+  const changedFieldSummary = changedFieldLabels.join(", ");
+  const isFieldChanged = (field: SignalRevisionField) =>
+    changedFields.includes(field);
+  const changedFieldClass = (field: SignalRevisionField) =>
+    isFieldChanged(field)
+      ? "rounded bg-amber-500/15 px-1 text-amber-200 ring-1 ring-inset ring-amber-400/40"
+      : "";
+  const changedFieldA11y = (field: SignalRevisionField) =>
+    isFieldChanged(field) ? { "data-changed": "true" as const } : {};
+  const changedFieldSrLabel = (field: SignalRevisionField) =>
+    isFieldChanged(field) ? <span className="sr-only"> (changed)</span> : null;
   const badgeSignal =
     signalAction === "BUY" ? "BUY" : signalAction === "SELL" ? "SELL" : "NEUTRAL";
 
@@ -375,7 +395,7 @@ export function SignalCard({
             tabIndex={0}
             onKeyDown={handleKeyDown}
             role="article"
-            aria-label={`${signalAction} signal for ${signalPair} at ${executionPrice} with ${signalConfidence}% confidence. Press Enter or right arrow to trade, left arrow to pass.`}
+            aria-label={`${signalAction} signal for ${signalPair} at ${executionPrice} with ${signalConfidence}% confidence.${signalRevision !== undefined ? ` Current revision ${signalRevision}.` : ""}${changedFieldLabels.length > 0 ? ` Changed fields: ${changedFieldSummary}.` : ""} Press Enter or right arrow to trade, left arrow to pass.`}
             aria-keyshortcuts="Enter ArrowRight ArrowLeft"
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -394,17 +414,36 @@ export function SignalCard({
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
-                  <span>{signalProvider}</span>
+                  <span className={changedFieldClass("ticker")} {...changedFieldA11y("ticker")}>
+                    {signalProvider}
+                    {changedFieldSrLabel("ticker")}
+                  </span>
                   <span aria-hidden="true">·</span>
-                  <span>{signalAction}</span>
+                  <span className={changedFieldClass("action")} {...changedFieldA11y("action")}>
+                    {signalAction}
+                    {changedFieldSrLabel("action")}
+                  </span>
                   <span aria-hidden="true">·</span>
-                  <span>{signalConfidence}% confidence</span>
+                  <span className={changedFieldClass("confidence")} {...changedFieldA11y("confidence")}>
+                    {signalConfidence}% confidence
+                    {changedFieldSrLabel("confidence")}
+                  </span>
                 </div>
                 {hasSignalRevision && (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-gray-50 rounded text-xs">
+                  <div className="flex flex-wrap items-center gap-1 px-2 py-1 bg-gray-50 rounded text-xs">
                     <span className="text-gray-400">Updated</span>
                     <span className="text-gray-500">{signalLastUpdated ? signalLastUpdated.toLocaleDateString() : "unknown"}</span>
+                    {signalRevision !== undefined && (
+                      <span className="text-gray-500">· Revision {signalRevision}</span>
+                    )}
                   </div>
+                )}
+                {changedFieldLabels.length > 0 && (
+                  <p className="text-xs text-amber-200">
+                    <span className="sr-only">Changed in this revision: </span>
+                    <span aria-hidden="true">Changed: </span>
+                    {changedFieldSummary}
+                  </p>
                 )}
               </div>
 
@@ -547,7 +586,10 @@ export function SignalCard({
                   style={{ overflow: "hidden" }}
                 >
                   <div className="flex flex-col gap-3 pt-1">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{analysis}</p>
+                    <p className={cn("text-sm text-muted-foreground leading-relaxed", changedFieldClass("details"))} {...changedFieldA11y("details")}>
+                      {analysis}
+                      {changedFieldSrLabel("details")}
+                    </p>
                   </div>
                 </motion.div>
               )}

@@ -12,6 +12,7 @@ import type {
   SubscriptionsResponse,
   GetSubscriptionsParams,
 } from "./api-types.generated";
+import type { SignalRevisionField } from "./signalRevisions";
 
 export class NetworkError extends Error {
   constructor() {
@@ -48,6 +49,10 @@ export interface Signal {
   lastUpdated?: string;
   /** Whether this signal has been updated since initial publication */
   hasRevision?: boolean;
+  /** 1-based revision number of the content above; absent when unknown */
+  revision?: number;
+  /** Fields that changed in this revision compared to the previous one */
+  changedFields?: SignalRevisionField[];
 }
 
 async function apiFetch<T>(url: string, signal?: AbortSignal): Promise<T> {
