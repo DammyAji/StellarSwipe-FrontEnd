@@ -9,13 +9,20 @@
  *   - partial: costBasis is undefined (data unavailable)
  *   - empty: no realizedPnL / unrealizedPnL recorded yet
  *
+ * Also surfaces the Stellar issuer's trustline authorization state (#1084).
+ * Missing or unrecognised authorization data renders as a distinct "Unknown"
+ * state that never implies the asset is tradeable.
+ *
  * Accessible labels on every figure; works at narrow widths via a single-column
  * responsive grid.
  */
 
 import { cn } from "@/lib/utils";
 import { AlertCircle, TrendingDown, TrendingUp } from "lucide-react";
-import type { PortfolioAsset } from "@/store/usePortfolioStore";
+import type {
+  PortfolioAsset,
+  TrustlineAuthorizationState,
+} from "@/store/usePortfolioStore";
 import { usePrivacyStore, PRIVACY_MASK } from "@/store/usePrivacyStore";
 
 interface PortfolioHoldingDetailProps {
@@ -75,6 +82,58 @@ function PnLCell({
           <TrendingDown size={11} aria-hidden="true" />
         )}
         {mask(formatted)}
+      </dd>
+    </>
+  );
+}
+
+const TRUSTLINE_AUTHORIZATION_LABELS: Record<
+  TrustlineAuthorizationState,
+  string
+> = {
+  authorized: "Authorized",
+  unauthorized: "Not authorized",
+  "authorized-to-maintain-liabilities": "Authorized to maintain liabilities",
+  unknown: "Unknown",
+};
+
+const TRUSTLINE_AUTHORIZATION_DESCRIPTIONS: Record<
+  TrustlineAuthorizationState,
+  string
+> = {
+  authorized: "The issuer has authorized this trustline.",
+  unauthorized: "The issuer has not authorized this trustline.",
+  "authorized-to-maintain-liabilities":
+    "The issuer allows holding and closing this asset, but not acquiring more.",
+  unknown:
+    "Trustline authorization could not be determined. This does not confirm the asset can be traded.",
+};
+
+function TrustlineAuthorizationCell({
+  state,
+}: {
+  state: TrustlineAuthorizationState | undefined;
+}) {
+  const resolved: TrustlineAuthorizationState = state ?? "unknown";
+  const label = TRUSTLINE_AUTHORIZATION_LABELS[resolved];
+  const description = TRUSTLINE_AUTHORIZATION_DESCRIPTIONS[resolved];
+  const isUnknown = resolved === "unknown";
+
+  return (
+    <>
+      <dt className="text-muted-foreground">Trustline authorization</dt>
+      <dd
+        className={cn(
+          "text-right flex items-center justify-end gap-1",
+          isUnknown
+            ? "text-muted-foreground text-xs italic"
+            : "text-foreground"
+        )}
+        aria-label={`Trustline authorization: ${label}. ${description}`}
+        title={description}
+      >
+        {isUnknown && <AlertCircle size={11} aria-hidden="true" />}
+        {label}
       </dd>
     </>
   );
@@ -149,6 +208,9 @@ export function PortfolioHoldingDetail({
             Unavailable
           </dd>
         )}
+
+        {/* Trustline authorization */}
+        <TrustlineAuthorizationCell state={asset.trustlineAuthorization} />
 
         {/* Realized P&L */}
         <PnLCell

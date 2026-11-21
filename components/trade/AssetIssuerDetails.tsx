@@ -1,20 +1,34 @@
 "use client";
 
-import { AlertTriangle, Check, Copy, Globe2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, Globe2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useClipboard } from "@/hooks/useClipboard";
 import {
   getIssuerStatus,
   getNetworkLabel,
+  getRecentIssuerMetadataChanges,
   groupAddress,
   shortenAddress,
+  ISSUER_METADATA_FIELD_LABELS,
+  type IssuerMetadataHistory,
   type TradeAssetInfo,
 } from "@/lib/assetIssuer";
+import {
+  formatAbsoluteTimestamp,
+  formatRelativeTimestamp,
+  toDate,
+} from "@/lib/timestampUtils";
 
 export interface AssetIssuerSide {
   /** Which side of the trade, e.g. "You pay" / "You receive". */
   label: string;
   asset: TradeAssetInfo;
+  /** Issuer metadata snapshots for this asset, when available (#1085). */
+  metadataHistory?: IssuerMetadataHistory | null;
+  /** True while metadata history is still being fetched. */
+  metadataHistoryLoading?: boolean;
+  /** Set when metadata history could not be loaded. */
+  metadataHistoryError?: string | null;
 }
 
 export interface AssetIssuerDetailsProps {
@@ -182,6 +196,112 @@ function AssetIssuerRow({
           </span>
         </p>
       )}
+
+      <IssuerMetadataChanges
+        assetCode={asset.code}
+        history={side.metadataHistory}
+        loading={side.metadataHistoryLoading}
+        error={side.metadataHistoryError}
+      />
     </li>
+  );
+}
+
+/**
+ * Recent issuer metadata changes (#1085).
+ *
+ * Summarizes the last change to the issuer-provided name, image or
+ * description. The canonical identity (code + issuer + network) above stays
+ * the source of truth: this block is explicitly labelled as issuer-provided
+ * and never claims a value when history is missing or failed to load.
+ */
+function IssuerMetadataChanges({
+  assetCode,
+  history,
+  loading,
+  error,
+}: {
+  assetCode: string;
+  history?: IssuerMetadataHistory | null;
+  loading?: boolean;
+  error?: string | null;
+}) {
+  const headingId = `issuer-metadata-heading-${assetCode}`;
+
+  if (loading) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      >
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+        <span>Checking issuer metadata history…</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <p role="alert" className="text-xs text-destructive">
+        Issuer metadata history for {assetCode} could not be loaded. Recent
+        changes are unknown.
+      </p>
+    );
+  }
+
+  const changes = getRecentIssuerMetadataChanges(history);
+  const updatedAt = toDate(changes[0]?.updatedAt);
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="space-y-1 rounded-lg border bg-muted/30 px-2 py-1.5"
+      data-testid="issuer-metadata-changes"
+    >
+      <h3
+        id={headingId}
+        className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground"
+      >
+        Recent issuer metadata changes
+      </h3>
+      {changes.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          No recorded changes to issuer-provided metadata for {assetCode}.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Issuer-provided details changed{" "}
+            {updatedAt ? (
+              <time
+                dateTime={updatedAt.toISOString()}
+                title={formatAbsoluteTimestamp(updatedAt)}
+              >
+                {formatRelativeTimestamp(updatedAt)}
+              </time>
+            ) : (
+              "at an unknown time"
+            )}
+            . Asset identity above is unchanged.
+          </p>
+          <ul className="space-y-1 text-xs">
+            {changes.map((change) => (
+              <li key={change.field} className="flex flex-wrap gap-x-1.5">
+                <span className="font-medium">
+                  {ISSUER_METADATA_FIELD_LABELS[change.field]}:
+                </span>
+                <span className="break-all text-muted-foreground line-through">
+                  {change.previous ?? "not set"}
+                </span>
+                <span aria-hidden="true">→</span>
+                <span className="sr-only">changed to</span>
+                <span className="break-all">{change.current ?? "removed"}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

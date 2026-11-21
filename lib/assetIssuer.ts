@@ -53,6 +53,76 @@ export function getIssuerStatus(asset: TradeAssetInfo): IssuerStatus {
   return isValidIssuerAddress(issuer) ? "known" : "invalid";
 }
 
+/** Issuer-provided descriptive metadata fields we can diff over time (#1085). */
+export type IssuerMetadataField = "name" | "image" | "description";
+
+export const ISSUER_METADATA_FIELD_LABELS: Record<IssuerMetadataField, string> = {
+  name: "Name",
+  image: "Image",
+  description: "Description",
+};
+
+/** A single issuer metadata snapshot, as published at `updatedAt`. */
+export interface IssuerMetadataSnapshot {
+  name?: string | null;
+  image?: string | null;
+  description?: string | null;
+  /** ISO timestamp of when this snapshot was observed. */
+  updatedAt: string;
+}
+
+export interface IssuerMetadataChange {
+  field: IssuerMetadataField;
+  /** Previous value, or null when the field was absent/empty before. */
+  previous: string | null;
+  /** New value, or null when the field was removed/emptied. */
+  current: string | null;
+  /** ISO timestamp of the snapshot that introduced this change. */
+  updatedAt: string;
+}
+
+export interface IssuerMetadataHistory {
+  /** Snapshots ordered oldest → newest. */
+  snapshots: IssuerMetadataSnapshot[];
+}
+
+function normalizeMetadataValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Summarizes the most recent change to an asset's issuer-provided metadata.
+ *
+ * Only the latest snapshot is compared with the one before it, so the result
+ * describes "what changed last" rather than the full history. Returns an empty
+ * array when there is no history, a single snapshot, or nothing changed — the
+ * caller must treat that as "no recent changes", never as "unchanged".
+ */
+export function getRecentIssuerMetadataChanges(
+  history: IssuerMetadataHistory | null | undefined
+): IssuerMetadataChange[] {
+  const snapshots = history?.snapshots ?? [];
+  if (snapshots.length < 2) return [];
+
+  const current = snapshots[snapshots.length - 1];
+  const previous = snapshots[snapshots.length - 2];
+  const updatedAt = current.updatedAt;
+  const changes: IssuerMetadataChange[] = [];
+
+  (Object.keys(ISSUER_METADATA_FIELD_LABELS) as IssuerMetadataField[]).forEach(
+    (field) => {
+      const before = normalizeMetadataValue(previous[field]);
+      const after = normalizeMetadataValue(current[field]);
+      if (before !== after) {
+        changes.push({ field, previous: before, current: after, updatedAt });
+      }
+    }
+  );
+
+  return changes;
+}
+
 /**
  * Shortens a long address to `GABCDE…WXYZ12` so it stays readable while still
  * showing enough characters on both ends to compare against a wallet.

@@ -18,7 +18,23 @@ export interface PortfolioAsset {
    * known — it must never be attributed to a wallet as fact.
    */
   walletAddress?: string;
+  /**
+   * Stellar asset issuer's trustline authorization state for this holding.
+   * Undefined means the state could not be determined — never assume it is
+   * authorized, and never present it as tradeable.
+   */
+  trustlineAuthorization?: TrustlineAuthorizationState;
 }
+
+/**
+ * Trustline authorization states reported by a Stellar asset issuer.
+ * `unknown` is used when the state is unavailable or unrecognised.
+ */
+export type TrustlineAuthorizationState =
+  | "authorized"
+  | "unauthorized"
+  | "authorized-to-maintain-liabilities"
+  | "unknown";
 
 export interface PortfolioState {
   assets: PortfolioAsset[];
@@ -27,6 +43,9 @@ export interface PortfolioState {
   totalUnrealizedPnL: number;
   isLoading: boolean;
   lastUpdated: Date | null;
+  /** Selected wallet filter; null means "all wallets". */
+  walletFilter: string | null;
+  setWalletFilter: (walletAddress: string | null) => void;
   setAssets: (assets: PortfolioAsset[]) => void;
   setLoading: (loading: boolean) => void;
   updateAsset: (symbol: string, value: number) => void;
@@ -43,6 +62,8 @@ export const usePortfolioStore = create<PortfolioState>()(
       totalUnrealizedPnL: 0,
       isLoading: false,
       lastUpdated: null,
+      walletFilter: null,
+      setWalletFilter: (walletAddress) => set({ walletFilter: walletAddress }),
       setAssets: (assets) => {
         const totalValue = assets.reduce((sum, asset) => sum + asset.value, 0);
         const totalRealizedPnL = assets.reduce(
@@ -108,3 +129,28 @@ export const usePortfolioStore = create<PortfolioState>()(
     { name: "portfolio-store" }
   )
 );
+
+/**
+ * Filter holdings to a selected wallet.
+ *
+ * - `null` / `undefined` filter → all holdings (no filtering).
+ * - A wallet filter only matches holdings explicitly attributed to that wallet;
+ *   holdings with unknown wallet attribution are excluded rather than being
+ *   presented as belonging to the selected wallet.
+ */
+export function filterAssetsByWallet(
+  assets: PortfolioAsset[],
+  walletAddress: string | null | undefined
+): PortfolioAsset[] {
+  if (!walletAddress) return assets;
+  return assets.filter((asset) => asset.walletAddress === walletAddress);
+}
+
+/** Distinct wallet addresses present in the holdings, in first-seen order. */
+export function getHoldingWalletAddresses(assets: PortfolioAsset[]): string[] {
+  const seen = new Set<string>();
+  for (const asset of assets) {
+    if (asset.walletAddress) seen.add(asset.walletAddress);
+  }
+  return Array.from(seen);
+}
