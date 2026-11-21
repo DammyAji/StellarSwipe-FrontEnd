@@ -48,6 +48,8 @@ import {
   formatAnnotationDate,
 } from "@/components/chart/ChartAnnotations";
 import { toDayKey, useChartAnnotations, type ChartAnnotation } from "@/hooks/useChartAnnotations";
+import { useTransactionStore } from "@/store/useTransactionStore";
+import { getTransactionExplorerUrl } from "@/lib/tradeReceipt";
 import { useCurrencyStore, EXCHANGE_RATES } from "@/store/useCurrencyStore";
 import { formatCurrency } from "@/lib/localeFormatter";
 import { LargestDailyMovements } from "./LargestDailyMovements";
@@ -149,6 +151,10 @@ export function PortfolioPerformanceBenchmarkChart({
   const [selectedMovementDay, setSelectedMovementDay] = useState<number | null>(null);
   const [selectedSnapshotDay, setSelectedSnapshotDay] = useState<number | null>(null);
   const [editor, setEditor] = useState<EditorState>(null);
+  const [logScale, setLogScale] = useState(false);
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null);
+  const [showTrades, setShowTrades] = useState(true);
+  const tradeHistory = useTransactionStore((s) => s.history);
   // #1048: the data-table view mirrors the chart's series in the user's
   // selected display currency.
   const [showDataTable, setShowDataTable] = useState(false);
@@ -276,7 +282,7 @@ export function PortfolioPerformanceBenchmarkChart({
 
   const chartData = useMemo(() => {
     if (portfolioPoints.length === 0) {
-      return { portfolioPath: "", benchmarkPath: "", maxVal: 0, minVal: 0, portfolioPts: [], benchmarkPts: [] };
+      return { portfolioPath: "", benchmarkPath: "", maxVal: 0, minVal: 0, portfolioPts: [], benchmarkPts: [], canUseLog: false, isLog: false };
     }
 
     const width = 320;
@@ -286,27 +292,30 @@ export function PortfolioPerformanceBenchmarkChart({
     const allValues = [
       ...portfolioPoints.map((p) => p.value),
       ...benchmarkPoints.map((p) => p.value),
-    ];
+    ].filter(Number.isFinite);
     const maxVal = Math.max(...allValues);
     const minVal = Math.min(...allValues);
-    const range = maxVal - minVal || 1;
+    // Log scale needs strictly positive values; fall back to linear otherwise.
+    const canUseLog = allValues.length > 0 && minVal > 0;
+    const isLog = logScale && canUseLog;
+    const scale = (v: number) => (isLog ? Math.log10(v) : v);
+    const scaledMin = scale(minVal);
+    const range = scale(maxVal) - scaledMin || 1;
+    const toY = (v: number) =>
+      Number.isFinite(v)
+        ? height - ((scale(v) - scaledMin) / range) * (height - padding * 2) - padding
+        : height - padding;
 
     const portfolioPts = portfolioPoints.map((point, i) => ({
       x: (i / (portfolioPoints.length - 1)) * (width - padding * 2) + padding,
-      y:
-        height -
-        ((point.value - minVal) / range) * (height - padding * 2) -
-        padding,
+      y: toY(point.value),
       value: point.value,
       timestamp: point.timestamp,
     }));
 
     const benchmarkPts = benchmarkPoints.map((point, i) => ({
       x: (i / (benchmarkPoints.length - 1)) * (width - padding * 2) + padding,
-      y:
-        height -
-        ((point.value - minVal) / range) * (height - padding * 2) -
-        padding,
+      y: toY(point.value),
       value: point.value,
       timestamp: point.timestamp,
     }));
@@ -320,8 +329,28 @@ export function PortfolioPerformanceBenchmarkChart({
       height,
       portfolioPts,
       benchmarkPts,
+      canUseLog,
+      isLog,
+      midVal: isLog ? Math.sqrt(minVal * maxVal) : (minVal + maxVal) / 2,
     };
-  }, [portfolioPoints, benchmarkPoints]);
+  }, [portfolioPoints, benchmarkPoints, logScale]);
+
+  // Executed trades (#1110) within the charted range, snapped to the nearest point.
+  const tradeMarkers = useMemo(() => {
+    const pts = chartData.portfolioPts;
+    if (pts.length === 0) return [];
+    const start = pts[0].timestamp;
+    const end = pts[pts.length - 1].timestamp;
+    return tradeHistory
+      .filter((t) => t.status === "SUCCEEDED" && t.hash && t.timestamp >= start && t.timestamp <= end)
+      .map((t) => {
+        let best = pts[0];
+        for (const p of pts) {
+          if (Math.abs(p.timestamp - t.timestamp) < Math.abs(best.timestamp - t.timestamp)) best = p;
+        }
+        return { trade: t, x: best.x };
+      });
+  }, [tradeHistory, chartData.portfolioPts]);
 
   // #1087: the summary values follow the date picked in the snapshot browser.
   // When no date is picked (or the picked date is no longer available) the
@@ -446,8 +475,6 @@ export function PortfolioPerformanceBenchmarkChart({
     },
     dataLength: chartData.portfolioPts?.length ?? 0,
   });
-  const { ref: tooltipRef, offset: tooltipOffset } =
-    useTooltipCollision<HTMLDivElement>(tooltip.isVisible, [tooltip.activeIndex]);
 
   // Remember the last inspected point so "Add note" still works after the
   // pointer leaves the chart or focus moves to the button.
@@ -459,6 +486,11 @@ export function PortfolioPerformanceBenchmarkChart({
     setSelectedPointIndex(null);
   }, [rangePoints]);
 
+  // Unpin when the plotted data changes so a pin never points at a different value.
+  useEffect(() => {
+    setPinnedIndex(null);
+  }, [chartData.portfolioPts]);
+
   // Drop a snapshot selection that no longer exists in the current range so
   // the summary never reports a date the chart cannot back up.
   useEffect(() => {
@@ -468,6 +500,12 @@ export function PortfolioPerformanceBenchmarkChart({
     );
     if (!stillAvailable) setSelectedSnapshotDay(null);
   }, [portfolioPoints, selectedSnapshotDay]);
+
+  const displayIndex =
+    pinnedIndex !== null && chartData.portfolioPts[pinnedIndex] ? pinnedIndex : tooltip.activeIndex;
+  const togglePin = (i: number) => setPinnedIndex((cur) => (cur === i ? null : i));
+  const { ref: tooltipRef, offset: tooltipOffset } =
+    useTooltipCollision<HTMLDivElement>(displayIndex !== null, [displayIndex]);
 
   const selectedPoint =
     selectedPointIndex !== null ? chartData.portfolioPts[selectedPointIndex] ?? null : null;
@@ -711,6 +749,30 @@ export function PortfolioPerformanceBenchmarkChart({
               XLM benchmark
             </label>
           </div>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              aria-pressed={chartData.isLog}
+              disabled={!chartData.canUseLog}
+              title={chartData.canUseLog ? undefined : "Log scale needs all values above zero"}
+              onClick={() => setLogScale((v) => !v)}
+            >
+              {chartData.isLog ? "Log scale" : "Linear scale"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              aria-pressed={showTrades}
+              onClick={() => setShowTrades((v) => !v)}
+            >
+              {showTrades ? "Hide trades" : "Show trades"}
+            </Button>
+          </div>
           {performanceDelta && (
             <p className="text-xs text-foreground-muted">
               Outperformance:{" "}
@@ -744,7 +806,11 @@ export function PortfolioPerformanceBenchmarkChart({
             aria-live="polite"
             className="sr-only"
           >
-            {tooltip.isVisible ? tooltip.activeDescription : ""}
+            {tooltip.isVisible
+              ? tooltip.activeDescription
+              : pinnedIndex !== null
+                ? `Tooltip pinned at ${formatPointDate(chartData.portfolioPts[pinnedIndex]?.timestamp ?? 0)}. Press Escape to unpin.`
+                : ""}
           </span>
           <span id={tooltip.instructionsId} className="sr-only">
             {CHART_KEYBOARD_INSTRUCTIONS}
@@ -808,6 +874,18 @@ export function PortfolioPerformanceBenchmarkChart({
             >
               ─ Portfolio
             </text>
+            {[chartData.maxVal, chartData.midVal, chartData.minVal].map((v, k) => (
+              <text
+                key={k}
+                x={2}
+                y={[20, (chartData.height ?? 160) / 2, (chartData.height ?? 160) - 20][k] + 3}
+                fontSize={8}
+                fill="currentColor"
+                className="text-foreground-muted"
+              >
+                ${(v ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </text>
+            ))}
             </g>
 
             {/* Invisible pointer/touch hit areas, one per point */}
@@ -825,8 +903,8 @@ export function PortfolioPerformanceBenchmarkChart({
                   fill="transparent"
                   onPointerEnter={() => tooltip.showAt(i)}
                   onPointerLeave={tooltip.hide}
-                  onClick={() => setSelectedPointIndex(i)}
-                  onTouchStart={(e) => { e.preventDefault(); tooltip.showAt(i); setSelectedPointIndex(i); }}
+                  onClick={() => { setSelectedPointIndex(i); togglePin(i); }}
+                  onTouchStart={(e) => { e.preventDefault(); tooltip.showAt(i); setSelectedPointIndex(i); togglePin(i); }}
                   onTouchEnd={tooltip.hide}
                   style={{ cursor: "crosshair" }}
                 />
@@ -852,10 +930,33 @@ export function PortfolioPerformanceBenchmarkChart({
               );
             })}
 
+            {/* Executed trade markers (#1110), kept on the baseline away from controls */}
+            {showTrades && tradeMarkers.map(({ trade, x }) => {
+              const base = (chartData.height ?? 160) - 2;
+              return (
+                <a
+                  key={trade.id}
+                  href={getTransactionExplorerUrl(trade.hash)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${trade.assetPair} trade, ${trade.amount} at ${trade.price}, ${new Date(trade.timestamp).toLocaleString()}. Open receipt`}
+                >
+                  <title>{`${trade.assetPair} · ${trade.amount} @ ${trade.price} — open receipt`}</title>
+                  <path
+                    d={`M ${x} ${base - 8} L ${x - 4} ${base} L ${x + 4} ${base} Z`}
+                    fill="#f59e0b"
+                    stroke="white"
+                    strokeWidth={1}
+                    className="focus:outline-none"
+                  />
+                </a>
+              );
+            })}
+
             {/* Active dots */}
-            {tooltip.activeIndex !== null && chartData.portfolioPts[tooltip.activeIndex] && (() => {
-              const pt = chartData.portfolioPts[tooltip.activeIndex];
-              const j = showBenchmark ? benchmarkIndexFor(tooltip.activeIndex) : null;
+            {displayIndex !== null && chartData.portfolioPts[displayIndex] && (() => {
+              const pt = chartData.portfolioPts[displayIndex];
+              const j = showBenchmark ? benchmarkIndexFor(displayIndex) : null;
               const bench = j !== null ? chartData.benchmarkPts[j] : null;
               return (
                 <g aria-hidden="true">
@@ -879,12 +980,25 @@ export function PortfolioPerformanceBenchmarkChart({
           </svg>
 
           {/* Keyboard focus target (pointer events pass through to the hit areas) */}
-          <div {...tooltip.containerProps} className={CHART_FOCUS_OVERLAY_CLASS} />
+          <div
+            {...tooltip.containerProps}
+            onKeyDown={(e) => {
+              if ((e.key === "Enter" || e.key === " ") && tooltip.activeIndex !== null) {
+                e.preventDefault();
+                togglePin(tooltip.activeIndex);
+                return;
+              }
+              if (e.key === "Escape" && pinnedIndex !== null) setPinnedIndex(null);
+              tooltip.containerProps.onKeyDown(e);
+            }}
+            className={CHART_FOCUS_OVERLAY_CLASS}
+          />
 
           {/* Floating tooltip */}
-          {tooltip.activeIndex !== null &&
-            chartData.portfolioPts[tooltip.activeIndex] && (() => {
-              const i = tooltip.activeIndex;
+          {displayIndex !== null &&
+            chartData.portfolioPts[displayIndex] && (() => {
+              const i = displayIndex;
+              const isPinned = pinnedIndex === i;
               const pt = chartData.portfolioPts[i];
               const j = showBenchmark ? benchmarkIndexFor(i) : null;
               const bench = j !== null ? chartData.benchmarkPts[j] : null;
@@ -893,16 +1007,31 @@ export function PortfolioPerformanceBenchmarkChart({
                 <div
                   ref={tooltipRef}
                   role="tooltip"
-                  className="pointer-events-none absolute z-10 rounded bg-slate-900/90 px-2 py-1 text-[10px] text-white shadow-md"
+                  className={cn(
+                    "absolute z-10 rounded bg-slate-900/90 px-2 py-1 text-[10px] text-white shadow-md",
+                    isPinned ? "pointer-events-auto ring-1 ring-white/40" : "pointer-events-none"
+                  )}
                   style={{
                     left: Math.min(Math.max(0, pt.x - 24), (chartData.width ?? 320) - 110),
                     top: Math.max(0, pt.y - (bench ? 64 : 40)),
                     whiteSpace: "nowrap",
                     transform: `translate(${tooltipOffset.x}px, ${tooltipOffset.y}px)`,
                   }}
-                  aria-hidden="true"
+                  aria-hidden={!isPinned}
                 >
-                  <div className="text-slate-300">{formatPointDate(pt.timestamp)}</div>
+                  <div className="flex items-center justify-between gap-2 text-slate-300">
+                    <span>{formatPointDate(pt.timestamp)}{isPinned ? " · pinned" : ""}</span>
+                    {isPinned && (
+                      <button
+                        type="button"
+                        aria-label="Unpin tooltip"
+                        className="rounded px-1 leading-none hover:bg-white/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white"
+                        onClick={() => setPinnedIndex(null)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <div>
                     <span className="font-semibold text-green-400">Portfolio</span> ${pt.value.toFixed(2)}
                   </div>
@@ -999,6 +1128,8 @@ export function PortfolioPerformanceBenchmarkChart({
               : selectedPoint
                 ? `Selected: ${formatAnnotationDate(toDayKey(selectedPoint.timestamp))}`
                 : "Select a point to add a note."}
+            {" "}Click or press Enter to pin a tooltip; Escape unpins.
+            {showTrades && ` ${tradeMarkers.length === 0 ? "No trades in this range." : `${tradeMarkers.length} ${tradeMarkers.length === 1 ? "trade" : "trades"} marked.`}`}
           </span>
           <AddAnnotationButton
             disabled={!selectedPoint || editor !== null}
