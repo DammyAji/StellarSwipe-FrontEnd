@@ -15,6 +15,12 @@ interface OnboardingState {
   setCurrentStep: (step: number) => void;
   setChecklistDismissed: (dismissed: boolean) => void;
   reset: () => void;
+  /**
+   * Restarts the walkthrough from the first step. Unlike `reset`, this keeps
+   * the persisted `completed` flag so a finished walkthrough is not recorded
+   * as incomplete again, and it never touches account preferences.
+   */
+  restart: () => void;
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -37,6 +43,7 @@ export const useOnboardingStore = create<OnboardingState>()(
       setChecklistDismissed: (dismissed) =>
         set({ checklistDismissed: dismissed }),
       reset: () => set({ completed: false, dismissed: false, currentStep: 0 }),
+      restart: () => set({ dismissed: false, currentStep: 0 }),
     }),
     {
       name: "stellar-onboarding",

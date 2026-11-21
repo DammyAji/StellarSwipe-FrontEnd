@@ -6,6 +6,7 @@ export interface ToastOptions {
   duration?: number;
   link?: { href: string; label: string };
   action?: ToastAction;
+  countdownMs?: number;
 }
 
 function showToast(tone: ToastTone, title: string, options?: ToastOptions) {
@@ -16,6 +17,7 @@ function showToast(tone: ToastTone, title: string, options?: ToastOptions) {
     link: options?.link,
     action: options?.action,
     duration: options?.duration ?? DEFAULT_TOAST_DURATION,
+    countdownMs: options?.countdownMs,
   });
 }
 

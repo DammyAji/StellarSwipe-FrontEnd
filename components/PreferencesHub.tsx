@@ -293,11 +293,11 @@ function ChartPaletteRow() {
 }
 
 function ReplayOnboardingRow() {
-  const reset = useOnboardingStore((s) => s.reset);
+  const restart = useOnboardingStore((s) => s.restart);
   const replayTour = useGuidedTourStore((s) => s.replay);
 
   const handleReplay = () => {
-    reset();
+    restart();
     replayTour();
   };
 

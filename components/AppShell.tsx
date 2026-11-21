@@ -20,6 +20,7 @@ import { PortfolioErrorBoundary } from "@/components/PortfolioErrorBoundary";
 import { SignalFeedErrorBoundary } from "@/components/signal/SignalFeedErrorBoundary";
 import { useFocusReturn } from "@/hooks/useFocusReturn";
 import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { RestartWalkthroughButton } from "@/components/RestartWalkthroughButton";
 
 // Heavy/optional panels deferred out of the initial /app bundle — they're
 // not needed for first paint (modals only open on interaction, charts and
@@ -168,6 +169,7 @@ export function AppShell({ children }: AppShellProps) {
               {publicKey?.slice(0, 8)}...{publicKey?.slice(-8)}
             </p>
             <PrivacyToggle size="sm" />
+            <RestartWalkthroughButton />
             <WalletDropdown />
           </div>
         </header>

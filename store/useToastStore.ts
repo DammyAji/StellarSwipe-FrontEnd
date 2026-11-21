@@ -17,6 +17,8 @@ export interface ToastMessage {
   action?: ToastAction;
   tone: ToastTone;
   duration: number;
+  /** Optional visible countdown (ms) shown next to the action, e.g. "Undo · 8s". */
+  countdownMs?: number;
 }
 
 interface ToastState {
@@ -66,12 +68,13 @@ export const useToastStore = create<ToastState>((set, get) => ({
     action,
     tone,
     duration = DEFAULT_TOAST_DURATION,
+    countdownMs,
   }) => {
     const id = generateToastId();
     set((state) => ({
       toasts: [
         ...state.toasts,
-        { id, title, description, link, action, tone, duration },
+        { id, title, description, link, action, tone, duration, countdownMs },
       ].slice(-MAX_VISIBLE_TOASTS),
     }));
 

@@ -17,6 +17,7 @@ import { NetworkStatusIndicator } from "@/components/NetworkStatusIndicator";
 import { MobileNav } from "@/components/MobileNav";
 import { ToastViewport } from "@/components/ToastViewport";
 import { DesktopNavRail } from "@/components/DesktopNavRail";
+import { DemoModeIndicator } from "@/components/DemoModeIndicator";
 
 // Dev-only overlays (~950 lines combined) render null in production but were
 // previously statically imported into every page's root layout bundle. They
@@ -110,6 +111,7 @@ export default function RootLayout({
             Skip to main content
           </a>
           <NetworkStatusIndicator />
+          <DemoModeIndicator />
           <RouteAnnouncer />
           <ScrollRestoration />
           <WebVitalsReporting />

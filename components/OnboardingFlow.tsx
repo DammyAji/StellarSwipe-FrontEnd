@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   useOnboardingStore,
   useOnboardingHydrated,
@@ -48,6 +49,17 @@ export function OnboardingFlow() {
     useOnboardingStore();
   const isHydrated = useOnboardingHydrated();
   const focusTrapRef = useFocusTrap({ isActive: true });
+
+  // Resume incomplete progress after navigation: the persisted step is
+  // restored on rehydration, so the flow reopens where the user left off.
+  useEffect(() => {
+    if (!isHydrated) return;
+    const { completed, dismissed: isDismissed, currentStep: step } =
+      useOnboardingStore.getState();
+    if (!completed && !isDismissed && step > 0) {
+      useOnboardingStore.getState().setCurrentStep(step);
+    }
+  }, [isHydrated]);
 
   if (!isHydrated || dismissed) return null;
 
