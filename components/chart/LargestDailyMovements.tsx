@@ -126,6 +126,19 @@ export function LargestDailyMovements({
       if (pointIndex !== null && onSelectMovement) {
         onSelectMovement(movement, pointIndex);
       }
+      return;
+    }
+    // Arrow keys move between the gain/loss cards and announce the active one.
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const next = e.key === "ArrowRight" ? 1 : 0;
+      const target = next === 0 ? largestGain : largestLoss;
+      if (!target) return;
+      tooltip.showAt(next);
+      const buttons = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+        'button[role="option"]'
+      );
+      buttons?.[next]?.focus();
     }
   };
 
@@ -207,16 +220,19 @@ export function LargestDailyMovements({
           Largest Daily Movements
         </h3>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3" role="listbox" aria-label="Largest daily movements">
           {/* Largest Gain */}
           {largestGain && (
             <button
               type="button"
               role="option"
               aria-selected={selectedDay === largestGain.day}
+              aria-describedby={tooltip.instructionsId}
               aria-label={`Largest gain: ${formatMovementDate(largestGain.day)}, portfolio value ${formatCurrency(largestGain.value)}, up ${formatPercentChange(largestGain.changePercent)}. Press Enter to highlight on chart.`}
               onClick={() => handleClick(largestGain)}
               onKeyDown={(e) => handleKeyDown(e, largestGain)}
+              onFocus={() => tooltip.showAt(0)}
+              onBlur={tooltip.hide}
               tabIndex={0}
               className={cn(
                 "relative rounded-lg p-3 text-left transition-all",
@@ -252,9 +268,12 @@ export function LargestDailyMovements({
               type="button"
               role="option"
               aria-selected={selectedDay === largestLoss.day}
+              aria-describedby={tooltip.instructionsId}
               aria-label={`Largest loss: ${formatMovementDate(largestLoss.day)}, portfolio value ${formatCurrency(largestLoss.value)}, down ${formatPercentChange(largestLoss.changePercent)}. Press Enter to highlight on chart.`}
               onClick={() => handleClick(largestLoss)}
               onKeyDown={(e) => handleKeyDown(e, largestLoss)}
+              onFocus={() => tooltip.showAt(1)}
+              onBlur={tooltip.hide}
               tabIndex={0}
               className={cn(
                 "relative rounded-lg p-3 text-left transition-all",
@@ -294,7 +313,7 @@ export function LargestDailyMovements({
 
         {/* Keyboard navigation hints */}
         <p className="text-[10px] text-foreground-muted text-center">
-          Use ← → to navigate, Enter to highlight on chart
+          Use ← → to move between movements, Enter to highlight on chart
         </p>
       </CardContent>
     </Card>
