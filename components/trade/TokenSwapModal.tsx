@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X, ArrowDown, ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { QuoteContext, type QuoteContextData } from "@/components/trade/QuoteContext";
 
 interface Token {
   symbol: string;
@@ -28,9 +29,10 @@ const EXCHANGE_RATE = 0.094; // 1 XLM = 0.094 USDC (mock)
 interface TokenSwapModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  quoteContext?: QuoteContextData;
 }
 
-export function TokenSwapModal({ open, onOpenChange }: TokenSwapModalProps) {
+export function TokenSwapModal({ open, onOpenChange, quoteContext }: TokenSwapModalProps) {
   const [fromToken, setFromToken] = React.useState<Token>(TOKENS[0]);
   const [toToken, setToToken] = React.useState<Token>(TOKENS[1]);
   const [fromAmount, setFromAmount] = React.useState("");
@@ -205,11 +207,14 @@ export function TokenSwapModal({ open, onOpenChange }: TokenSwapModalProps) {
                   id="details-heading"
                   className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
-                  Trade details
+                  Trade preview details
                 </h2>
+                <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+                  Demo estimate only; this is not a live executable quote.
+                </p>
                 <dl className="space-y-2.5 text-sm">
                   <TradeRow
-                    label="Exchange rate"
+                    label="Demo exchange rate"
                     value={`1 ${fromToken.symbol} = ${EXCHANGE_RATE} ${toToken.symbol}`}
                   />
                   <TradeRow
@@ -224,6 +229,7 @@ export function TokenSwapModal({ open, onOpenChange }: TokenSwapModalProps) {
                   />
                   <TradeRow label="Network fee" value="~0.00001 XLM" />
                 </dl>
+                <QuoteContext context={quoteContext} />
               </section>
             )}
 
