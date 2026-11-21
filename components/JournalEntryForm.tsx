@@ -6,7 +6,7 @@ import { journalEntrySchema, normalizeJournalTags, type JournalEntry } from "@/l
 import { createJournalEntry, updateJournalEntry, JournalApiError } from "@/lib/journalApi";
 import { Button } from "@/components/ui/button";
 import { ValidationSummary } from "@/components/forms/ValidationSummary";
-import { Plus, AlertCircle, Loader2, X } from "lucide-react";
+import { Plus, AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { useSubmitGuard } from "@/hooks/useSubmitGuard";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
@@ -111,6 +111,11 @@ export function JournalEntryForm({
   const consumeDraft = useJournalDraftStore((s) => s.consume);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Fields the user has left (blurred) at least once. Only those show inline
+  // errors before the first submit attempt, so a fresh form stays quiet.
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  // Set once a save succeeds so the user gets explicit success feedback.
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   // ── Autosave & recovery ────────────────────────────────────────────
   const draftKey = `${DRAFT_PREFIX}${editEntry?.id ?? "new"}`;
@@ -258,8 +263,10 @@ export function JournalEntryForm({
     });
     setTagInput("");
     setErrors({});
+    setTouched({});
     setSubmitted(false);
     setSubmitError(null);
+    setSubmitSuccess(null);
     setHasConflict(false);
     setIsDirty(false);
     setAutosaveStatus("idle");
@@ -300,6 +307,7 @@ export function JournalEntryForm({
    */
   const updateField = useCallback((field: keyof JournalEntry, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setSubmitSuccess(null);
     setErrors((prev) => {
       if (!(field in prev)) return prev;
       const next = { ...prev };
@@ -342,6 +350,7 @@ export function JournalEntryForm({
    * errors inline — before the user ever attempts to submit.
    */
   const validateField = useCallback((field: keyof JournalEntry) => {
+    setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
     const current = {
       ...formDataRef.current,
       fee: formDataRef.current.fee || "0",
@@ -360,6 +369,13 @@ export function JournalEntryForm({
       return next;
     });
   }, []);
+
+  /** Inline error for a field — hidden until it was blurred or submit failed. */
+  const fieldError = useCallback(
+    (field: keyof JournalEntry) =>
+      submitted || touched[field] ? errors[field] : undefined,
+    [errors, submitted, touched]
+  );
 
   /** Summary entries (with element ids) for the ValidationSummary panel. */
   const summaryErrors = useMemo(() => {
@@ -418,6 +434,7 @@ export function JournalEntryForm({
         clearDraft(draftKey);
         linkedRef.current = null;
         setLinkedInfo(null);
+        setSubmitSuccess(`Saved ${data.assetPair} — ${data.amount} ${data.token} to your journal.`);
         toast.success("Transaction added to journal", {
           description: `${data.assetPair} — ${data.amount} ${data.token}`,
           duration: 2500,
@@ -481,6 +498,7 @@ export function JournalEntryForm({
         store.getState().clearPending(entry.id);
         clearDraft(draftKey);
         setAutosaveStatus("idle");
+        setSubmitSuccess(`Saved changes to ${data.assetPair}.`);
         toast.success("Journal entry updated", {
           description: `${data.assetPair} — changes saved.`,
           duration: 2500,
@@ -520,6 +538,7 @@ export function JournalEntryForm({
     async (e: React.FormEvent) => {
       e.preventDefault();
       setSubmitError(null);
+      setSubmitSuccess(null);
       setHasConflict(false);
       if (autosaveStatus === "failed") setAutosaveStatus("saving");
       setSubmitted(true);
@@ -544,6 +563,7 @@ export function JournalEntryForm({
   const overwriteConflict = useCallback(async () => {
     if (!editEntry) return;
     setSubmitError(null);
+    setSubmitSuccess(null);
     setHasConflict(false);
     const data = validateCurrentForm();
     if (!data) return;
@@ -576,6 +596,17 @@ export function JournalEntryForm({
     } else {
       persistDraft();
     }
+  };
+
+  // Inline error for a field, only once it was blurred or submit was attempted.
+  const renderFieldError = (field: keyof JournalEntry, id: string) => {
+    const message = fieldError(field);
+    if (!message) return null;
+    return (
+      <p id={id} role="alert" className="text-xs text-red-400">
+        {message}
+      </p>
+    );
   };
 
   return (
@@ -657,10 +688,34 @@ export function JournalEntryForm({
         </div>
       )}
 
+      {submitSuccess && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300"
+          role="status"
+          aria-live="polite"
+          data-testid="journal-submit-success"
+        >
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{submitSuccess}</span>
+        </div>
+      )}
+
       {submitError && (
         <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400" role="alert">
           <AlertCircle size={16} className="mt-0.5 shrink-0" />
-          <span>{submitError}</span>
+          <span className="flex-1">
+            {submitError} Your entry was not saved — check the details and try again.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={retrySave}
+            disabled={isSubmitting}
+            data-testid="journal-submit-retry"
+          >
+            Try again
+          </Button>
         </div>
       )}
 
@@ -696,10 +751,10 @@ export function JournalEntryForm({
             onBlur={() => validateField("date")}
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             disabled={isSubmitting}
-            aria-invalid={!!errors.date}
-            aria-describedby={errors.date ? "journal-entry-date-error" : undefined}
+            aria-invalid={!!fieldError("date")}
+            aria-describedby={fieldError("date") ? "journal-entry-date-error" : undefined}
           />
-          {errors.date && <p id="journal-entry-date-error" className="text-[10px] text-red-400">{errors.date}</p>}
+          {renderFieldError("date", "journal-entry-date-error")}
         </div>
 
         <div className="space-y-1">
@@ -713,10 +768,10 @@ export function JournalEntryForm({
             onBlur={() => validateField("assetPair")}
             className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             disabled={isSubmitting}
-            aria-invalid={!!errors.assetPair}
-            aria-describedby={errors.assetPair ? "journal-entry-asset-pair-error" : undefined}
+            aria-invalid={!!fieldError("assetPair")}
+            aria-describedby={fieldError("assetPair") ? "journal-entry-asset-pair-error" : undefined}
           />
-          {errors.assetPair && <p id="journal-entry-asset-pair-error" className="text-[10px] text-red-400">{errors.assetPair}</p>}
+          {renderFieldError("assetPair", "journal-entry-asset-pair-error")}
         </div>
 
         <div className="space-y-1">

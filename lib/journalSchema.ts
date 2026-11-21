@@ -18,21 +18,41 @@ export function normalizeJournalTags(tags: readonly string[]): string[] {
  * This is used for both manual entry and CSV bulk import.
  */
 export const journalEntrySchema = z.object({
-  date: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: "Invalid date format. Use YYYY-MM-DD.",
-  }),
-  assetPair: z.string().min(1, "Asset pair is required (e.g. XLM/USDC)"),
+  date: z
+    .string()
+    .min(1, "Enter the trade date (YYYY-MM-DD).")
+    .refine((val) => !isNaN(Date.parse(val)), {
+      message: "Enter a valid date in YYYY-MM-DD format, e.g. 2024-05-31.",
+    }),
+  assetPair: z
+    .string()
+    .trim()
+    .min(1, "Enter the asset pair you traded, e.g. XLM/USDC."),
   type: z.enum(["COPY_TRADE", "SWAP", "MANUAL"]),
-  amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Amount must be a positive number",
-  }),
-  price: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Price must be a positive number",
-  }),
-  fee: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Fee must be a non-negative number",
-  }),
-  token: z.string().min(1, "Token symbol is required (e.g. XLM)"),
+  amount: z
+    .string()
+    .trim()
+    .min(1, "Enter the amount you traded, e.g. 100.")
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: "Amount must be a number greater than 0, e.g. 100.",
+    }),
+  price: z
+    .string()
+    .trim()
+    .min(1, "Enter the price per unit, e.g. 0.12.")
+    .refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
+      message: "Price must be a number greater than 0, e.g. 0.12.",
+    }),
+  fee: z
+    .string()
+    .trim()
+    .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
+      message: "Fee must be 0 or a positive number, e.g. 0.01.",
+    }),
+  token: z
+    .string()
+    .trim()
+    .min(1, "Enter the token symbol you traded, e.g. XLM."),
   status: z.enum(["PENDING", "SUCCEEDED", "FAILED"]),
   outcome: z.enum(["WIN", "LOSS", "PENDING"]),
   notes: z.string().optional(),

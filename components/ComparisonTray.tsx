@@ -1,6 +1,7 @@
 "use client";
 
-import { X, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { X, AlertCircle, GitCompareArrows } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,48 @@ export function ComparisonTray() {
     useComparisonStore();
   const prefersReducedMotion = useReducedMotion();
 
-  // Don't render the tray at all when there's nothing to show
+  // Empty state: guide users to start comparing instead of hiding the tray
   if (signals.length === 0 && !limitReached) {
-    return null;
+    return (
+      <div
+        role="region"
+        aria-label="Signal comparison tray"
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-50",
+          "bg-background/95 backdrop-blur border-t border-border shadow-lg",
+          "px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+          "pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto flex max-w-3xl flex-col items-center gap-3 text-center",
+            "sm:flex-row sm:justify-between sm:text-left"
+          )}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+              aria-hidden="true"
+            >
+              <GitCompareArrows className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                No signals selected for comparison
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Add up to {MAX_COMPARISON} signals from the feed to compare their
+                performance side by side.
+              </p>
+            </div>
+          </div>
+          <Button asChild size="sm" className="w-full sm:w-auto">
+            <Link href="/compare">Browse signals to compare</Link>
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

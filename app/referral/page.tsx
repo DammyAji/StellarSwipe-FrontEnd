@@ -253,7 +253,13 @@ function useCopyStatus() {
   return { status, copy };
 }
 
-function ReferralShareDialog() {
+function ReferralShareDialog({
+  triggerLabel = "Share",
+  triggerClassName = "px-3 py-2 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors",
+}: {
+  triggerLabel?: string;
+  triggerClassName?: string;
+}) {
   const { status, copy } = useCopyStatus();
   const [shareError, setShareError] = useState(false);
   const canNativeShare =
@@ -274,10 +280,10 @@ function ReferralShareDialog() {
     <Dialog>
       <DialogTrigger asChild>
         <button
-          className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors"
+          className={triggerClassName}
           data-testid="share-dialog-trigger"
         >
-          Share
+          {triggerLabel}
         </button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -416,6 +422,15 @@ const SAMPLE_REFERRALS: Referral[] = [
   { id: "GHI789", stage: "ineligible" },
 ];
 
+const PRIMARY_CTA_CLASS =
+  "w-full sm:w-auto px-5 py-3 bg-purple-500 hover:bg-purple-600 rounded-md text-sm font-semibold text-white shadow-lg shadow-purple-500/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 forced-colors:bg-[ButtonFace] forced-colors:text-[ButtonText] forced-colors:border forced-colors:border-[ButtonText]";
+
+const TRUST_POINTS = [
+  "Rewards are credited automatically once a referral qualifies.",
+  "You can track every invite and its status on this page.",
+  "Your referral link never expires.",
+];
+
 export default function ReferralPage() {
   const referralCount = useMemo(
     () => SAMPLE_REFERRALS.filter((r) => r.stage === "completed").length,
@@ -424,12 +439,43 @@ export default function ReferralPage() {
 
   return (
     <RouteErrorBoundary>
-      <main className="min-h-screen bg-black text-white p-6">
+      <main className="min-h-screen bg-black text-white p-4 sm:p-6">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-semibold">Referrals</h1>
-            <ReferralShareDialog />
-          </div>
+          <h1 className="text-xl font-semibold mb-4">Referrals</h1>
+
+          <section
+            className="bg-white/5 p-4 sm:p-6 rounded mb-4"
+            aria-labelledby="referral-cta-heading"
+          >
+            <h2 id="referral-cta-heading" className="text-lg font-semibold">
+              Invite friends, earn rewards
+            </h2>
+            <p className="text-sm text-white/70 mt-2">
+              Share your personal link with people who trade on StellarSwipe.
+              When they join and complete their first trade, you earn account
+              credit — and they get a head start too.
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <ReferralShareDialog
+                triggerLabel="Invite a friend"
+                triggerClassName={PRIMARY_CTA_CLASS}
+              />
+              <p className="text-xs text-white/60">
+                Takes less than a minute. No limit on how many people you invite.
+              </p>
+            </div>
+            <ul className="mt-4 space-y-1 text-xs text-white/60">
+              {TRUST_POINTS.map((point) => (
+                <li key={point} className="flex gap-2">
+                  <span aria-hidden="true" className="text-green-400">
+                    ✓
+                  </span>
+                  <span>{point}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           <MilestoneProgressBar referralCount={referralCount} />
           <ReferralProgressTracker referrals={SAMPLE_REFERRALS} />
         </div>
