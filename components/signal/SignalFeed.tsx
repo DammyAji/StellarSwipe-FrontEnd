@@ -172,12 +172,19 @@ export function SignalFeed({ initialData }: SignalFeedProps = {}) {
   );
 
   const availableProviders = useMemo(
-    () => [...new Set(allSignals.map((s) => s.ticker))].sort(),
+    () =>
+      [
+        ...new Set(
+          allSignals
+            .map((s) => s.provider)
+            .filter((p): p is string => typeof p === "string" && p !== "")
+        ),
+      ].sort(),
     [allSignals]
   );
 
   const availableAssets = useMemo(
-    () => [...new Set(allSignals.map((s) => s.ticker))].sort(),
+    () => [...new Set(allSignals.map((s) => pairForTicker(s.ticker)))].sort(),
     [allSignals]
   );
 

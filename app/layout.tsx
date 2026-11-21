@@ -7,6 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { PageTransitionPlaceholder } from "@/components/PageTransitionPlaceholder";
 import { RouteAnnouncer } from "@/components/RouteAnnouncer";
 import { TradeStatusBanner } from "@/components/TradeStatusBanner";
+import { TransactionFailure } from "@/components/TransactionFailure";
 import { ScrollRestoration } from "@/components/ScrollRestoration";
 import { WebVitalsReporting } from "@/components/WebVitalsReporting";
 import { ComparisonTray } from "@/components/ComparisonTray";
@@ -125,6 +126,7 @@ export default function RootLayout({
             <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
           </div>
           <TradeStatusBanner />
+          <TransactionFailure />
           <DevPerfOverlay />
           <AnalyticsDebugConsole />
           <ComparisonTray />

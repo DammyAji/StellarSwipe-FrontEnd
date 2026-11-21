@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Signal } from "@/lib/signals";
+import { signalMatchesQuery } from "@/lib/signalSearch";
 import {
   useSignalFilterStore,
   useSignalFilterHydrated,
@@ -129,14 +130,18 @@ export function useSearchFilter({
 
     if (provider.trim()) {
       const q = provider.trim().toLowerCase();
-      filtered = filtered.filter((s) => s.ticker.toLowerCase().includes(q));
+      filtered = filtered.filter(
+        (s) =>
+          s.ticker.toLowerCase().includes(q) ||
+          (s.provider ?? "").toLowerCase().includes(q)
+      );
     }
 
     if (searchTerm) {
+      // #156: search covers pairs, providers, strategy tags and descriptions.
       filtered = filtered.filter(
         (s) =>
-          s.ticker.toLowerCase().includes(searchTerm) ||
-          s.details.toLowerCase().includes(searchTerm) ||
+          signalMatchesQuery(s, searchTerm) ||
           s.action.toLowerCase().includes(searchTerm)
       );
     }

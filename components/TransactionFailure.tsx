@@ -1,13 +1,27 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, RefreshCw, X, Bell, BellOff } from "lucide-react";
+import * as Sentry from "@sentry/nextjs";
+import {
+  AlertTriangle,
+  RefreshCw,
+  X,
+  Bell,
+  BellOff,
+  Lightbulb,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTransactionStore } from "@/store/useTransactionStore";
+import { useToastStore } from "@/store/useToastStore";
 import { showNotification } from "@/lib/notifications";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
 import analyticsService from "@/services/analytics";
+import {
+  getRetryDelayMs,
+  getTransactionErrorInfo,
+  MAX_RETRY_ATTEMPTS,
+} from "@/lib/transactions/errorMessages";
 
 interface TransactionFailureProps {
   onRetry?: (preservedInput: Record<string, unknown> | null) => void;
@@ -18,25 +32,89 @@ export function TransactionFailure({ onRetry }: TransactionFailureProps) {
     useTransactionStore();
   const { alertsEnabled, toggleAlerts, categoryPreferences } =
     useNotificationPreference();
+  const enqueueToast = useToastStore((state) => state.enqueue);
+
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const errorInfo = getTransactionErrorInfo(error?.code, error?.message);
+  const canRetry = errorInfo.retryable && retryAttempt < MAX_RETRY_ATTEMPTS;
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimer.current !== null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
+  }, []);
+
+  useEffect(() => clearRetryTimer, [clearRetryTimer]);
+
+  // Reset backoff state whenever a new failure surfaces.
+  useEffect(() => {
+    if (!showError) return;
+    setRetryAttempt(0);
+    setIsRetrying(false);
+    clearRetryTimer();
+  }, [showError, error, clearRetryTimer]);
 
   const handleRetry = useCallback(() => {
+    if (isRetrying) return;
     const input = preservedInput;
-    clearError();
-    setPreservedInput(null);
-    onRetry?.(input);
-  }, [clearError, preservedInput, setPreservedInput, onRetry]);
+    const attempt = retryAttempt + 1;
+    const delay = getRetryDelayMs(attempt);
+
+    setRetryAttempt(attempt);
+    setIsRetrying(true);
+
+    enqueueToast({
+      tone: "info",
+      title: "Retrying transaction",
+      description: `Attempt ${attempt} of ${MAX_RETRY_ATTEMPTS} in ${Math.round(
+        delay / 1000
+      )}s…`,
+      duration: delay,
+    });
+
+    analyticsService.track("trade_retry_scheduled", {
+      attempt,
+      delay_ms: delay,
+      error_code: error?.code || undefined,
+    });
+
+    clearRetryTimer();
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      setIsRetrying(false);
+      clearError();
+      setPreservedInput(null);
+      onRetry?.(input);
+    }, delay);
+  }, [
+    isRetrying,
+    preservedInput,
+    retryAttempt,
+    enqueueToast,
+    error?.code,
+    clearRetryTimer,
+    clearError,
+    setPreservedInput,
+    onRetry,
+  ]);
 
   const handleDismiss = useCallback(() => {
+    clearRetryTimer();
+    setIsRetrying(false);
     clearError();
     setPreservedInput(null);
-  }, [clearError, setPreservedInput]);
+  }, [clearRetryTimer, clearError, setPreservedInput]);
 
   useEffect(() => {
     if (!showError || !error) return;
+    const info = getTransactionErrorInfo(error.code, error.message);
     if (alertsEnabled && categoryPreferences.systemUpdates) {
       showNotification("Trade Failed", {
-        body:
-          error.message || "Something went wrong during the trade execution.",
+        body: error.message || info.message,
         icon: "⚠️",
         category: "systemUpdates",
         critical: true,
@@ -45,6 +123,19 @@ export function TransactionFailure({ onRetry }: TransactionFailureProps) {
     analyticsService.track("trade_confirmation_failed", {
       error_message: error.message || "unknown_error",
       error_code: error.code || undefined,
+      error_category: info.category,
+    });
+    // Report to monitoring so failures can be tracked and debugged.
+    Sentry.withScope((scope) => {
+      scope.setContext("transaction_failure", {
+        code: error.code ?? null,
+        reason: error.reason ?? null,
+        category: info.category,
+        retryable: info.retryable,
+      });
+      Sentry.captureException(
+        new Error(error.message || info.message)
+      );
     });
   }, [showError, error, alertsEnabled, categoryPreferences.systemUpdates]);
 
@@ -151,6 +242,28 @@ export function TransactionFailure({ onRetry }: TransactionFailureProps) {
                 "Something went wrong during the trade execution."}
             </motion.p>
 
+            <motion.div
+              className="mb-6 space-y-2 rounded-xl border border-accent-sky/20 bg-accent-sky/10 p-4"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28 }}
+            >
+              <div className="flex items-center gap-2">
+                <Lightbulb
+                  className="h-4 w-4 text-accent-sky"
+                  aria-hidden="true"
+                />
+                <span className="text-xs font-medium text-foreground">
+                  {errorInfo.title}
+                </span>
+              </div>
+              <ul className="list-disc space-y-1 pl-5 text-xs text-foreground-muted">
+                {errorInfo.suggestions.map((suggestion) => (
+                  <li key={suggestion}>{suggestion}</li>
+                ))}
+              </ul>
+            </motion.div>
+
             {(error.reason || error.code) && (
               <motion.div
                 className="mb-6 space-y-2 rounded-xl bg-accent-danger/10 border border-accent-danger/10 p-4"
@@ -189,10 +302,19 @@ export function TransactionFailure({ onRetry }: TransactionFailureProps) {
             >
               <Button
                 onClick={handleRetry}
+                disabled={!canRetry || isRetrying}
                 className="flex-1 gap-2 bg-accent-danger text-foreground hover:opacity-90"
               >
-                <RefreshCw className="h-4 w-4" />
-                Retry
+                <RefreshCw
+                  className={`h-4 w-4 ${isRetrying ? "animate-spin" : ""}`}
+                />
+                {isRetrying
+                  ? `Retrying in ${Math.round(
+                      getRetryDelayMs(retryAttempt) / 1000
+                    )}s…`
+                  : canRetry
+                    ? "Retry"
+                    : "Retry limit reached"}
               </Button>
               <Button
                 onClick={handleDismiss}
@@ -202,6 +324,16 @@ export function TransactionFailure({ onRetry }: TransactionFailureProps) {
                 Dismiss
               </Button>
             </motion.div>
+
+            <p className="mt-3 text-center text-xs text-foreground-subtle">
+              Need help?{" "}
+              <a
+                href="/security"
+                className="underline underline-offset-2 hover:text-foreground-muted"
+              >
+                Review wallet &amp; network troubleshooting
+              </a>
+            </p>
           </motion.div>
         </motion.div>
       )}

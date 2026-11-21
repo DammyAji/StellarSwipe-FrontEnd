@@ -6,6 +6,7 @@ import { CheckCircle, ArrowRight, Eye, X, Bell, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { useTransactionStore } from "@/store/useTransactionStore";
+import { useToastStore } from "@/store/useToastStore";
 import { getExplorerTxUrl, normalizeNetwork } from "@/lib/stellar/explorer";
 import { showNotification } from "@/lib/notifications";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
@@ -16,6 +17,7 @@ const AUTO_DISMISS_MS = 8000;
 
 export function TransactionSuccess() {
   const { success, showSuccess, clearSuccess } = useTransactionStore();
+  const enqueueToast = useToastStore((state) => state.enqueue);
   const { alertsEnabled, toggleAlerts, categoryPreferences } =
     useNotificationPreference();
 
@@ -43,7 +45,18 @@ export function TransactionSuccess() {
       amount: success.amount,
       price: success.price,
     });
-  }, [showSuccess, success, alertsEnabled, categoryPreferences.systemUpdates]);
+    enqueueToast({
+      tone: "success",
+      title: "Trade executed",
+      description: `${success.amount} ${success.token} confirmed on-chain.`,
+    });
+  }, [
+    showSuccess,
+    success,
+    alertsEnabled,
+    categoryPreferences.systemUpdates,
+    enqueueToast,
+  ]);
 
   useEffect(() => {
     if (!showSuccess) return;
