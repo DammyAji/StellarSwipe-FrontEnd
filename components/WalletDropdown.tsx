@@ -31,7 +31,9 @@ export function WalletDropdown() {
     publicKey,
     wallets,
     activePublicKey,
+    defaultTradeWalletPublicKey,
     switchWallet,
+    setDefaultTradeWallet,
     setWalletNickname,
     connectAnother,
     disconnect,
@@ -241,7 +243,7 @@ export function WalletDropdown() {
           ref={menuRef}
           role="menu"
           aria-label="Wallet options"
-          className="absolute end-0 mt-2 w-80 rounded-xl border bg-popover shadow-lg p-2 flex flex-col gap-1 z-50"
+          className="absolute end-0 mt-2 max-h-[min(80vh,36rem)] w-[min(20rem,calc(100vw-1.5rem))] overflow-y-auto rounded-xl border bg-popover p-2 shadow-lg flex flex-col gap-1 z-50"
         >
           {/* Connected wallets list */}
           {wallets.length > 0 && (
@@ -322,6 +324,65 @@ export function WalletDropdown() {
                   );
                 })}
               </ul>
+
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Preselect for new trades
+                </p>
+                <div role="group" aria-label="Default account for new trades">
+                  {wallets.map((wallet) => {
+                    const isDefault =
+                      defaultTradeWalletPublicKey === wallet.publicKey;
+                    return (
+                      <button
+                        key={`trade-default-${wallet.publicKey}`}
+                        type="button"
+                        role="menuitem"
+                        tabIndex={0}
+                        onClick={() =>
+                          setDefaultTradeWallet(wallet.publicKey)
+                        }
+                        aria-label={`Set ${wallet.nickname ?? truncate(wallet.publicKey)} as default for new trades`}
+                        aria-pressed={isDefault}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="min-w-0 truncate">
+                          {wallet.nickname
+                            ? `${wallet.nickname} · ${truncate(wallet.publicKey)}`
+                            : truncate(wallet.publicKey)}
+                        </span>
+                        {isDefault && (
+                          <Check
+                            className="h-3 w-3 shrink-0 text-blue-400"
+                            aria-label="Default for new trades"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    tabIndex={0}
+                    onClick={() => setDefaultTradeWallet(null)}
+                    aria-label="Ask me to choose an account for each trade"
+                    aria-pressed={defaultTradeWalletPublicKey === null}
+                    className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Ask me to choose each time
+                  </button>
+                </div>
+                {defaultTradeWalletPublicKey &&
+                  !wallets.some(
+                    (wallet) =>
+                      wallet.publicKey === defaultTradeWalletPublicKey,
+                  ) && (
+                    <p role="status" className="mt-1 px-3 text-[11px] text-amber-600 dark:text-amber-300">
+                      Saved default is not connected. New trades will ask you
+                      to choose an account.
+                    </p>
+                  )}
+              </div>
             </div>
           )}
 

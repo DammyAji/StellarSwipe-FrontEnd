@@ -26,6 +26,11 @@ import { validateTradeField } from "@/lib/tradeSchemas";
 import { useNetworkMismatch } from "@/components/NetworkMismatchBanner";
 import { NetworkSwitchDialog } from "@/components/NetworkSwitchDialog";
 import { GlossaryTerm } from "@/components/GlossaryTerm";
+import { WalletSelectionModal } from "@/components/WalletSelectionModal";
+import {
+  isTradeWalletEligible,
+  resolvePreferredTradeWallet,
+} from "@/lib/tradeWalletSelection";
 
 function truncateKey(key: string) {
   return `${key.slice(0, 6)}...${key.slice(-4)}`;
@@ -39,6 +44,7 @@ export interface PositionDetails {
   amount: string;
   price: number;
   orderType: OrderType;
+  walletPublicKey: string;
 }
 
 /** Market price snapshot. `expiresAt` is epoch ms; omit when validity is unknown. */
@@ -179,10 +185,16 @@ export function TradeModal({
   // losing the order the user is reviewing.
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [switchTarget, setSwitchTarget] = useState<string | null>(null);
+  const [selectedTradeWallet, setSelectedTradeWallet] = useState("");
+  const [tradeWalletInitialized, setTradeWalletInitialized] = useState(false);
   const { isDemoMode } = useDemoModeStore();
-  const walletPublicKey = useWalletStore((s) => s.publicKey);
   const walletNetworkDraft = useWalletStore((s) => s.network);
-  const draftContext = `${ASSET_CODE}:${walletNetworkDraft}:${walletPublicKey ?? ""}`;
+  const wallets = useWalletStore((s) => s.wallets);
+  const defaultTradeWalletPublicKey = useWalletStore(
+    (s) => s.defaultTradeWalletPublicKey
+  );
+  const walletConnected = useWalletStore((s) => s.isConnected);
+  const draftContext = `${ASSET_CODE}:${walletNetworkDraft}:${selectedTradeWallet}`;
   const draftKey = `${TRADE_DRAFT_PREFIX}${draftContext}`;
   const { enabled: positionLimitEnabled, percentage: positionLimitPercentage } =
     usePositionLimitStore();
@@ -192,9 +204,14 @@ export function TradeModal({
     appNetwork,
     state: networkState,
   } = useNetworkMismatch();
-  const walletKey = useWalletStore((s) => s.publicKey);
-  const walletConnected = useWalletStore((s) => s.isConnected);
-  const walletReady = walletConnected && !!walletKey;
+  const walletReady = isTradeWalletEligible(
+    selectedTradeWallet,
+    wallets,
+    walletConnected && tradeWalletInitialized
+  );
+  const walletKey = walletReady ? selectedTradeWallet : null;
+  const selectedWalletNickname =
+    wallets.find((wallet) => wallet.publicKey === walletKey)?.nickname;
   const networkLabel = networkMismatch
     ? walletNetwork
     : networkState.status === "match"
@@ -280,6 +297,25 @@ export function TradeModal({
   const prerequisitesMet = walletReady && !networkMismatch;
   const reviewDisabled = disabled || !prerequisitesMet;
 
+  // Start each new trade with the saved default only if that account is still
+  // connected. A missing/stale default leaves the selector unchosen.
+  useEffect(() => {
+    if (!open) {
+      setTradeWalletInitialized(false);
+      return;
+    }
+
+    const walletState = useWalletStore.getState();
+    setSelectedTradeWallet(
+      resolvePreferredTradeWallet(
+        walletState.defaultTradeWalletPublicKey,
+        walletState.wallets,
+        walletState.isConnected,
+      ) ?? "",
+    );
+    setTradeWalletInitialized(true);
+  }, [open]);
+
   // Reset form state when modal opens
   useEffect(() => {
     if (open) {
@@ -297,7 +333,7 @@ export function TradeModal({
   // Skip the next save so the restored values aren't written back mid-load.
   const skipDraftSaveRef = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open || !tradeWalletInitialized) return;
     const draft = readTradeDraft(draftKey, draftContext) ?? DEFAULT_DRAFT;
     skipDraftSaveRef.current = true;
     setType(draft.type);
@@ -305,7 +341,7 @@ export function TradeModal({
     setAmount(draft.amount);
     setStopLoss(draft.stopLoss);
     setPositionLimit(draft.positionLimit);
-  }, [open, draftKey, draftContext]);
+  }, [open, tradeWalletInitialized, draftKey, draftContext]);
 
   // Persist entry fields so leaving the trade flow doesn't lose them.
   useEffect(() => {
@@ -349,10 +385,27 @@ export function TradeModal({
   useEffect(() => {
     if (walletKeyRef.current === walletKey) return;
     walletKeyRef.current = walletKey;
+    if (submitting) return;
     setStep((s) => (s === "review" ? "input" : s));
     setSlippageAcknowledged(false);
     setConfirmError(null);
-  }, [walletKey]);
+  }, [walletKey, submitting]);
+
+  // If a chosen account disconnects while a trade is being reviewed, clear
+  // only the per-trade choice; never silently fall back to another account.
+  useEffect(() => {
+    if (
+      !selectedTradeWallet ||
+      isTradeWalletEligible(selectedTradeWallet, wallets, walletConnected) ||
+      submitting
+    ) {
+      return;
+    }
+    setSelectedTradeWallet("");
+    setStep((currentStep) => (currentStep === "review" ? "input" : currentStep));
+    setSlippageAcknowledged(false);
+    setConfirmError(null);
+  }, [selectedTradeWallet, wallets, walletConnected, submitting]);
 
   // A network switch also invalidates the review (the order was priced on the
   // previous network); keep the entered order and return to the input step.
@@ -443,6 +496,20 @@ export function TradeModal({
 
   const handleConfirm = useCallback(async () => {
     if (disabled || quoteExpired) return;
+    const latestWalletState = useWalletStore.getState();
+    const tradeWalletPublicKey = isTradeWalletEligible(
+      selectedTradeWallet,
+      latestWalletState.wallets,
+      latestWalletState.isConnected,
+    )
+      ? selectedTradeWallet
+      : null;
+    if (!tradeWalletPublicKey) {
+      setConfirmError(
+        "The selected account is no longer connected. Go back and choose a connected account."
+      );
+      return;
+    }
     // Guard: ignore if a confirmation is already in-flight
     if (confirmInFlightRef.current) return;
     confirmInFlightRef.current = true;
@@ -456,7 +523,7 @@ export function TradeModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          publicKey: walletPublicKey,
+          publicKey: tradeWalletPublicKey,
           network: walletNetwork,
           orderType: type,
           amount,
@@ -468,7 +535,14 @@ export function TradeModal({
         const body = await res.json().catch(() => null);
         throw new Error(body?.message ?? "Trade was rejected by the server.");
       }
-      await mockBuildTx({ type, price, amount, stopLoss, positionLimit });
+      await mockBuildTx({
+        type,
+        price,
+        amount,
+        stopLoss,
+        positionLimit,
+        publicKey: tradeWalletPublicKey,
+      });
     } catch (err) {
       // Rollback: revert to review step and surface a distinct failure message.
       // Only submission errors land here; once the order is placed, a failure
@@ -485,7 +559,14 @@ export function TradeModal({
     setSubmitting(false);
     confirmInFlightRef.current = false;
     clearTradeDraft(draftKey);
-    onConfirm ? onConfirm({ amount, price, orderType: type }) : onClose();
+    onConfirm
+      ? onConfirm({
+          amount,
+          price,
+          orderType: type,
+          walletPublicKey: tradeWalletPublicKey,
+        })
+      : onClose();
   }, [
     type,
     price,
@@ -497,7 +578,7 @@ export function TradeModal({
     disabled,
     draftKey,
     quoteExpired,
-    walletPublicKey,
+    selectedTradeWallet,
     walletNetwork,
     estimatedSlippage,
   ]);
@@ -544,9 +625,10 @@ export function TradeModal({
     feeEstimateAvailable ? `$${value.toFixed(4)}` : "—";
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
+    <>
+      <AnimatePresence>
+        {open && (
+          <motion.div
           className="fixed inset-0 z-modal flex items-center justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -671,6 +753,86 @@ export function TradeModal({
               </div>
             ) : step === "input" ? (
               <>
+                <section
+                  aria-label="Trade account selection"
+                  className="mb-4 rounded-lg border border-border bg-input p-3"
+                >
+                  {!tradeWalletInitialized ? (
+                    <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                      Loading saved account preference…
+                    </p>
+                  ) : walletConnected && wallets.length > 0 ? (
+                    <>
+                      <label
+                        htmlFor="trade-wallet-account"
+                        className="mb-1.5 block text-xs font-medium text-foreground-muted"
+                      >
+                        Account for this trade
+                      </label>
+                      <select
+                        id="trade-wallet-account"
+                        data-testid="trade-wallet-select"
+                        value={selectedTradeWallet}
+                        onChange={(event) => {
+                          setSelectedTradeWallet(event.target.value);
+                          setConfirmError(null);
+                        }}
+                        disabled={submitting}
+                        aria-required="true"
+                        aria-describedby="trade-wallet-help"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                      >
+                        <option value="">
+                          {defaultTradeWalletPublicKey &&
+                          !wallets.some(
+                            (wallet) =>
+                              wallet.publicKey === defaultTradeWalletPublicKey,
+                          )
+                            ? "Saved default unavailable — choose an account"
+                            : "Choose a connected account"}
+                        </option>
+                        {wallets.map((wallet) => (
+                          <option key={wallet.publicKey} value={wallet.publicKey}>
+                            {wallet.nickname
+                              ? `${wallet.nickname} · ${truncateKey(wallet.publicKey)}`
+                              : truncateKey(wallet.publicKey)}
+                          </option>
+                        ))}
+                      </select>
+                      <p
+                        id="trade-wallet-help"
+                        className="mt-1.5 text-xs text-muted-foreground"
+                      >
+                        {walletReady &&
+                        selectedTradeWallet === defaultTradeWalletPublicKey
+                          ? "Saved default selected. You can change it for this trade only."
+                          : "Choose an account for this trade. This does not change your saved default."}
+                      </p>
+                      {!walletReady && (
+                        <p
+                          role="alert"
+                          className="mt-1 text-xs text-accent-warning"
+                        >
+                          Select a connected account before reviewing the order.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        No connected account is available for this trade.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setWalletModalOpen(true)}
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        Connect wallet
+                      </button>
+                    </div>
+                  )}
+                </section>
+
                 <div
                   className="space-y-4"
                   id={`${type.toLowerCase()}-panel`}
@@ -1129,7 +1291,7 @@ export function TradeModal({
                       <span className="text-foreground-muted">Wallet</span>
                       <span className="font-mono font-medium text-foreground">
                         {walletReady && walletKey
-                          ? truncateKey(walletKey)
+                          ? `${selectedWalletNickname ? `${selectedWalletNickname} · ` : ""}${truncateKey(walletKey)}`
                           : "Not connected"}
                       </span>
                     </div>
@@ -1276,8 +1438,15 @@ export function TradeModal({
               </>
             )}
           </motion.div>
-        </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {walletModalOpen && (
+        <WalletSelectionModal
+          open={walletModalOpen}
+          onClose={() => setWalletModalOpen(false)}
+        />
       )}
-    </AnimatePresence>
+    </>
   );
 }

@@ -17,6 +17,10 @@ jest.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: jest.fn(), push: jest.fn() }),
 }));
 
+jest.mock("@/lib/stellar", () => ({
+  NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
+}));
+
 jest.mock("@/hooks/usePortfolio", () => ({
   usePortfolio: () => ({ refetch: jest.fn().mockResolvedValue(undefined) }),
 }));
@@ -49,6 +53,7 @@ function seedWallets(keys: string[], active: string) {
     activePublicKey: active,
     publicKey: active,
     isConnected: true,
+    defaultTradeWalletPublicKey: null,
   });
 }
 
@@ -62,6 +67,7 @@ describe("WalletDropdown", () => {
     useWalletStore.setState({
       wallets: [],
       activePublicKey: null,
+      defaultTradeWalletPublicKey: null,
       publicKey: null,
       isConnected: false,
       network: "TESTNET",
@@ -120,6 +126,42 @@ describe("WalletDropdown", () => {
 
       expect(useWalletStore.getState().activePublicKey).toBe(WALLET_A);
       expect(useWalletStore.getState().publicKey).toBe(WALLET_A);
+    });
+
+    it("saves a separate default for new trades without switching the active account", () => {
+      seedWallets([WALLET_A, WALLET_B], WALLET_A);
+      render(<WalletDropdown />);
+      const menu = openMenu();
+
+      fireEvent.click(
+        within(menu).getByRole("menuitem", {
+          name: `Set ${truncate(WALLET_B)} as default for new trades`,
+        })
+      );
+
+      expect(useWalletStore.getState().defaultTradeWalletPublicKey).toBe(WALLET_B);
+      expect(useWalletStore.getState().activePublicKey).toBe(WALLET_A);
+      expect(
+        within(menu).getByRole("menuitem", {
+          name: `Set ${truncate(WALLET_B)} as default for new trades`,
+        })
+      ).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("allows users to clear the default and choose for every trade", () => {
+      seedWallets([WALLET_A, WALLET_B], WALLET_A);
+      useWalletStore.getState().setDefaultTradeWallet(WALLET_B);
+      render(<WalletDropdown />);
+      const menu = openMenu();
+
+      fireEvent.click(
+        within(menu).getByRole("menuitem", {
+          name: "Ask me to choose an account for each trade",
+        })
+      );
+
+      expect(useWalletStore.getState().defaultTradeWalletPublicKey).toBeNull();
+      expect(useWalletStore.getState().activePublicKey).toBe(WALLET_A);
     });
   });
 

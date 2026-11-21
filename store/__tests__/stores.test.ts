@@ -19,6 +19,9 @@ import { useThemeStore } from "@/store/useThemeStore";
 describe("useWalletStore", () => {
   beforeEach(() => {
     useWalletStore.setState({
+      wallets: [],
+      activePublicKey: null,
+      defaultTradeWalletPublicKey: null,
       publicKey: null,
       isConnected: false,
       network: "TESTNET",
@@ -60,6 +63,36 @@ describe("useWalletStore", () => {
     useWalletStore.setState({ network: "MAINNET" });
     useWalletStore.getState().disconnect();
     expect(useWalletStore.getState().network).toBe("MAINNET");
+  });
+
+  it("sets a default trade account only for a connected wallet", () => {
+    useWalletStore.setState({
+      wallets: [{ publicKey: "GWALLET_A" }, { publicKey: "GWALLET_B" }],
+      activePublicKey: "GWALLET_A",
+      publicKey: "GWALLET_A",
+      isConnected: true,
+    });
+
+    useWalletStore.getState().setDefaultTradeWallet("GWALLET_B");
+    expect(useWalletStore.getState().defaultTradeWalletPublicKey).toBe("GWALLET_B");
+
+    useWalletStore.getState().setDefaultTradeWallet("GNOT_CONNECTED");
+    expect(useWalletStore.getState().defaultTradeWalletPublicKey).toBe("GWALLET_B");
+  });
+
+  it("retains the saved preference through disconnect so it can be revalidated later", () => {
+    useWalletStore.setState({
+      wallets: [{ publicKey: "GWALLET_A" }],
+      activePublicKey: "GWALLET_A",
+      publicKey: "GWALLET_A",
+      isConnected: true,
+    });
+    useWalletStore.getState().setDefaultTradeWallet("GWALLET_A");
+
+    useWalletStore.getState().disconnectAll();
+
+    expect(useWalletStore.getState().defaultTradeWalletPublicKey).toBe("GWALLET_A");
+    expect(useWalletStore.getState().isConnected).toBe(false);
   });
 });
 

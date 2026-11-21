@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AUDIT_ACTIONS, recordAuditEntry } from "@/services/auditTrail";
 
-interface Wallet {
+export interface Wallet {
   publicKey: string;
   /** User-assigned label. Display only — never replaces the address. */
   nickname?: string;
@@ -22,12 +22,15 @@ export function normalizeNickname(raw: string): string | undefined {
 interface WalletState {
   wallets: Wallet[];
   activePublicKey: string | null;
+  /** Saved default for new trades; may be unavailable while disconnected. */
+  defaultTradeWalletPublicKey: string | null;
   /** Active wallet key — kept for backward compatibility */
   publicKey: string | null;
   isConnected: boolean;
   network: string;
   addWallet: (key: string) => void;
   setActiveWallet: (key: string) => void;
+  setDefaultTradeWallet: (key: string | null) => void;
   removeWallet: (key: string) => void;
   /** Set, edit or clear (empty string) the nickname of a connected wallet. */
   setWalletNickname: (key: string, nickname: string) => void;
@@ -46,6 +49,7 @@ export const useWalletStore = create<WalletState>()(
     (set, get) => ({
       wallets: [],
       activePublicKey: null,
+      defaultTradeWalletPublicKey: null,
       publicKey: null,
       isConnected: false,
       network: "TESTNET",
@@ -76,6 +80,18 @@ export const useWalletStore = create<WalletState>()(
         set((state) => {
           if (!state.wallets.some((w) => w.publicKey === key)) return {};
           return { activePublicKey: key, publicKey: key };
+        }),
+
+      setDefaultTradeWallet: (key) =>
+        set((state) => {
+          if (
+            key !== null &&
+            (!state.isConnected ||
+              !state.wallets.some((wallet) => wallet.publicKey === key))
+          ) {
+            return {};
+          }
+          return { defaultTradeWalletPublicKey: key };
         }),
 
       setWalletNickname: (key, nickname) =>
