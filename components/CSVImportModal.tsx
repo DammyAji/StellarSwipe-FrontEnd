@@ -22,7 +22,19 @@ import {
   loadCSVImportDraft,
   clearCSVImportDraft,
   fileMatchesDraft,
+  loadSavedMappings,
+  saveMapping,
+  updateSavedMapping,
+  deleteSavedMapping,
+  findMissingColumns,
+  saveCSVImportSession,
+  loadCSVImportSession,
+  clearCSVImportSession,
+  toRowErrors,
+  csvCellId,
   type CSVImportDraft,
+  type CSVRowError,
+  type SavedCSVColumnMapping,
 } from "@/lib/csvImportDraft";
 import { DuplicateResolutionStep, type DuplicateGroup, type DuplicateResolution } from "@/components/DuplicateResolutionStep";
 import {
@@ -54,6 +66,8 @@ interface ValidationResult {
   rowNumber: number;
   data?: JournalEntry;
   errors?: string[];
+  // #1066 — per-field validation failures for direct navigation
+  fieldErrors?: CSVRowError[];
   isValid: boolean;
 }
 
@@ -72,6 +86,45 @@ function previewRowErrorId(row: number) {
   return `csv-preview-row-${row}-errors`;
 }
 
+/**
+ * #1066 — inline editor for an invalid cell. Commits on blur or Enter so the
+ * row is re-validated and the preview summary updates immediately.
+ */
+function EditableCell({
+  value,
+  label,
+  onCommit,
+}: {
+  value: string;
+  label: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <input
+      aria-label={label}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== value) onCommit(draft);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (draft !== value) onCommit(draft);
+        }
+      }}
+      className="w-full rounded-md border border-red-400/30 bg-slate-950 px-2 py-1 text-xs text-white outline-none focus:ring-2 focus:ring-red-400"
+    />
+  );
+}
+}
+
 export function CSVImportModal() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("upload");
@@ -83,7 +136,12 @@ export function CSVImportModal() {
     ValidationResult[]
   >([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [summary, setSummary] = useState({ imported: 0, skipped: 0 });
+  const [summary, setSummary] = useState({
+    imported: 0,
+    skipped: 0,
+    skippedDuplicates: 0,
+    skippedInvalid: 0,
+  });
   const [resumableDraft, setResumableDraft] = useState<CSVImportDraft | null>(
     null
   );
@@ -92,6 +150,26 @@ export function CSVImportModal() {
   const [duplicateResolutions, setDuplicateResolutions] = useState<
     Record<string, DuplicateResolution>
   >({});
+  // #1067 — rows the user excluded individually, keyed by duplicate group
+  const [excludedDuplicateRows, setExcludedDuplicateRows] = useState<
+    Record<string, number[]>
+  >({});
+  // #1065 — saved named column mappings
+  const [savedMappings, setSavedMappings] = useState<SavedCSVColumnMapping[]>(
+    []
+  );
+  const [mappingName, setMappingName] = useState("");
+  const [activeMappingId, setActiveMappingId] = useState<string | null>(null);
+  const [missingColumns, setMissingColumns] = useState<CSVColumn[]>([]);
+  const [editingMappingId, setEditingMappingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  // #1068 — whether the current state was restored from the in-session snapshot
+  const [restoredFromSession, setRestoredFromSession] = useState(false);
+  // #1066 — cell the user navigated to from the error list
+  const [focusedCell, setFocusedCell] = useState<{
+    rowIndex: number;
+    field: CSVColumn;
+  } | null>(null);
 
   const bulkAddTransactions = useTransactionStore(
     (state) => state.bulkAddTransactions
@@ -172,12 +250,81 @@ export function CSVImportModal() {
     setHeaders([]);
     setMapping({} as any);
     setValidationResults([]);
-    setSummary({ imported: 0, skipped: 0 });
+    setSummary({ imported: 0, skipped: 0, skippedDuplicates: 0, skippedInvalid: 0 });
     setDuplicateGroups([]);
     setDuplicateResolutions({});
+    setExcludedDuplicateRows({});
+    setMappingName("");
+    setActiveMappingId(null);
+    setMissingColumns([]);
+    setEditingMappingId(null);
+    setEditingName("");
+    setRestoredFromSession(false);
+    setFocusedCell(null);
     setActiveCell({ row: 0, col: 0 });
     setAnnouncement("");
   }, []);
+
+  // Load saved mappings each time the modal opens.
+  useEffect(() => {
+    if (open) {
+      setSavedMappings(loadSavedMappings());
+    }
+  }, [open]);
+
+  const applySavedMapping = useCallback(
+    (saved: SavedCSVColumnMapping) => {
+      setMapping({ ...saved.mapping } as Record<CSVColumn, string>);
+      setActiveMappingId(saved.id);
+      setMappingName(saved.name);
+      setMissingColumns(findMissingColumns(saved, headers));
+    },
+    [headers]
+  );
+
+  const handleSaveMapping = useCallback(() => {
+    const name = mappingName.trim();
+    if (!name) {
+      toast.error("Give the mapping a name first");
+      return;
+    }
+    const saved = activeMappingId
+      ? updateSavedMapping(activeMappingId, { name, mapping })
+      : saveMapping(name, mapping);
+    if (!saved) {
+      toast.error("Could not save mapping");
+      return;
+    }
+    setSavedMappings(loadSavedMappings());
+    setActiveMappingId(saved.id);
+    setMappingName(saved.name);
+    toast.success(`Saved mapping "${saved.name}"`);
+  }, [activeMappingId, mapping, mappingName]);
+
+  const handleRenameMapping = useCallback(
+    (id: string) => {
+      const name = editingName.trim();
+      if (!name) return;
+      updateSavedMapping(id, { name });
+      setSavedMappings(loadSavedMappings());
+      setEditingMappingId(null);
+      setEditingName("");
+    },
+    [editingName]
+  );
+
+  const handleDeleteMapping = useCallback(
+    (id: string) => {
+      deleteSavedMapping(id);
+      setSavedMappings(loadSavedMappings());
+      if (activeMappingId === id) {
+        setActiveMappingId(null);
+        setMappingName("");
+        setMissingColumns([]);
+      }
+    },
+    [activeMappingId]
+  );
 
   // Look for a resumable draft each time the modal opens.
   useEffect(() => {
@@ -185,6 +332,59 @@ export function CSVImportModal() {
       setResumableDraft(loadCSVImportDraft());
     }
   }, [open]);
+
+  // #1068 — restore the in-session file + preview when the dialog is reopened.
+  // Only mapping/preview states are restorable; completed (summary) or
+  // canceled imports are never snapshotted, so they cannot be replayed.
+  useEffect(() => {
+    if (!open) return;
+    const session = loadCSVImportSession();
+    if (!session) return;
+    setFile(session.file);
+    setCsvData(session.csvData);
+    setHeaders(session.headers);
+    setMapping(session.mapping as Record<CSVColumn, string>);
+    setValidationResults(session.validationResults as ValidationResult[]);
+    setDuplicateGroups(session.duplicateGroups as DuplicateGroup[]);
+    setDuplicateResolutions(
+      session.duplicateResolutions as Record<string, DuplicateResolution>
+    );
+    setExcludedDuplicateRows(session.excludedDuplicateRows);
+    setStep(session.step);
+    setRestoredFromSession(true);
+  }, [open]);
+
+  // #1068 — keep the in-session snapshot in sync while the import is in
+  // progress; drop it once the import completes or is canceled.
+  useEffect(() => {
+    if (!open) return;
+    if (!file || (step !== "mapping" && step !== "preview")) {
+      clearCSVImportSession();
+      return;
+    }
+    saveCSVImportSession({
+      file,
+      csvData,
+      headers,
+      mapping,
+      step,
+      validationResults,
+      duplicateGroups,
+      duplicateResolutions,
+      excludedDuplicateRows,
+    });
+  }, [
+    open,
+    file,
+    csvData,
+    headers,
+    mapping,
+    step,
+    validationResults,
+    duplicateGroups,
+    duplicateResolutions,
+    excludedDuplicateRows,
+  ]);
 
   // Persist mapping/step progress as the user works — never the raw CSV
   // rows or file contents, only metadata needed to relink a re-selected file.
@@ -210,6 +410,12 @@ export function CSVImportModal() {
     clearCSVImportDraft();
     setResumableDraft(null);
   }, []);
+
+  // #1068 — explicit discard of the restored in-session import.
+  const discardSession = useCallback(() => {
+    clearCSVImportSession();
+    reset();
+  }, [reset]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -263,6 +469,21 @@ export function CSVImportModal() {
           });
           setMapping(newMapping);
           setStep("mapping");
+          setRestoredFromSession(false);
+
+          // #1065 — check the new file against the active saved mapping.
+          const active = savedMappings.find((m) => m.id === activeMappingId);
+          if (active) {
+            const missing = findMissingColumns(active, results.meta.fields ?? []);
+            setMissingColumns(missing);
+            if (missing.length) {
+              toast.warning(
+                `Saved mapping "${active.name}" is missing columns: ${missing.join(", ")}`
+              );
+            }
+          } else {
+            setMissingColumns([]);
+          }
 
           if (isSameFileAsDraft) {
             toast.success("Restored your previous import progress");
@@ -310,6 +531,9 @@ export function CSVImportModal() {
           errors: !parsed.success
             ? parsed.error.issues.map((msg) => msg.message)
             : undefined,
+          fieldErrors: !parsed.success
+            ? toRowErrors(parsed.error.issues)
+            : undefined,
           isValid: parsed.success,
         };
       });
@@ -320,6 +544,7 @@ export function CSVImportModal() {
     }
 
     setValidationResults(results);
+    setFocusedCell(null);
     setIsProcessing(false);
 
     // ── Duplicate detection (#780) ─────────────────────────────────────
@@ -327,10 +552,12 @@ export function CSVImportModal() {
     // Group rows that share the same fingerprint to surface them as
     // duplicates the user should resolve before committing.
     const fingerprintCounts: Record<string, number> = {};
-    results.forEach((r) => {
+    const fingerprintRows: Record<string, number[]> = {};
+    results.forEach((r, index) => {
       if (!r.isValid || !r.data) return;
       const key = `${r.data.date}__${r.data.assetPair}`;
       fingerprintCounts[key] = (fingerprintCounts[key] ?? 0) + 1;
+      (fingerprintRows[key] ??= []).push(index);
     });
 
     const detectedGroups: DuplicateGroup[] = Object.entries(fingerprintCounts)
@@ -342,10 +569,17 @@ export function CSVImportModal() {
           description: `${pair} — ${date}`,
           incomingCount: count,
           existingCount: 0, // could cross-check against store; 0 for now
+          // #1067 — surface the fields that caused the match
+          matchedFields: [
+            { field: "Date", value: date },
+            { field: "Asset Pair", value: pair },
+          ],
+          rowIndices: fingerprintRows[key] ?? [],
         };
       });
 
     setDuplicateGroups(detectedGroups);
+    setExcludedDuplicateRows({});
 
     // Seed resolutions with the default ("skip") for each detected group.
     const seedResolutions: Record<string, DuplicateResolution> = {};
@@ -356,13 +590,14 @@ export function CSVImportModal() {
 
     // Route to duplicates step if any were found, otherwise go straight to preview.
     setStep(detectedGroups.length > 0 ? "duplicates" : "preview");
+    setRestoredFromSession(false);
   }, [csvData, mapping]);
 
   const handleImport = () => {
     const validRows = validationResults.filter((r) => r.isValid && r.data);
 
-    // Apply duplicate resolutions (#780): exclude rows whose fingerprint maps
-    // to "skip". Rows with "update" or "keep" (or no duplicate group) pass through.
+    // Apply duplicate resolutions (#780) and per-row exclusions (#1067):
+    // exclude rows whose fingerprint maps to "skip" or that the user excluded.
     const acceptedRows = validRows.filter((r) => {
       if (!r.data) return false;
       const key = `${r.data.date}__${r.data.assetPair}`;
@@ -371,6 +606,9 @@ export function CSVImportModal() {
       if (resolution === "skip" && duplicateGroups.some((g) => g.key === key)) {
         return false;
       }
+      // Rows the user explicitly excluded in the duplicate review step.
+      const rowIndex = validationResults.indexOf(r);
+      if ((excludedDuplicateRows[key] ?? []).includes(rowIndex)) return false;
       return true;
     });
 
@@ -389,13 +627,81 @@ export function CSVImportModal() {
     }));
 
     bulkAddTransactions(transactions);
+    const skippedInvalid = validationResults.length - validRows.length;
+    const skippedDuplicates = validRows.length - acceptedRows.length;
     setSummary({
       imported: transactions.length,
-      skipped: validationResults.length - transactions.length,
+      skipped: skippedInvalid + skippedDuplicates,
+      skippedDuplicates,
+      skippedInvalid,
     });
     setStep("summary");
     clearCSVImportDraft();
+    clearCSVImportSession();
   };
+
+  // #1066 — every invalid row with its field + reason, for direct navigation.
+  const rowErrorList = useMemo(
+    () =>
+      validationResults.flatMap((res, rowIndex) =>
+        res.isValid
+          ? []
+          : (res.fieldErrors ?? []).map((err) => ({ rowIndex, ...err }))
+      ),
+    [validationResults]
+  );
+
+  const focusCell = useCallback((rowIndex: number, field: CSVColumn) => {
+    setFocusedCell({ rowIndex, field });
+    if (typeof document === "undefined") return;
+    const el = document.getElementById(csvCellId(rowIndex, field));
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    (el as HTMLElement | null)?.focus?.();
+  }, []);
+
+  // #1066 — correct a cell in place and re-validate only that row, so the
+  // summary updates while every other (valid) row is preserved.
+  const updateCell = useCallback(
+    (rowIndex: number, field: CSVColumn, value: string) => {
+      const source = mapping[field];
+      if (!source) return;
+      const nextRow = { ...csvData[rowIndex], [source]: value };
+      setCsvData((prev) =>
+        prev.map((row, i) => (i === rowIndex ? nextRow : row))
+      );
+
+      const mappedRow: any = {};
+      Object.entries(mapping).forEach(([target, src]) => {
+        if (src) mappedRow[target.toLowerCase().replace(" ", "")] = nextRow[src];
+      });
+      const validationData = {
+        ...mappedRow,
+        type: mappedRow.type || "MANUAL",
+        status: mappedRow.status || "SUCCEEDED",
+        outcome: mappedRow.outcome || "PENDING",
+        fee: mappedRow.fee || "0",
+      };
+      const parsed = journalEntrySchema.safeParse(validationData);
+      setValidationResults((prev) =>
+        prev.map((res, i) =>
+          i === rowIndex
+            ? {
+                row: nextRow,
+                data: parsed.success ? parsed.data : undefined,
+                errors: parsed.success
+                  ? undefined
+                  : parsed.error.issues.map((msg) => msg.message),
+                fieldErrors: parsed.success
+                  ? undefined
+                  : toRowErrors(parsed.error.issues),
+                isValid: parsed.success,
+              }
+            : res
+        )
+      );
+    },
+    [csvData, mapping]
+  );
 
   const mappingIssues = useMemo(() => {
     const issues: string[] = [];
@@ -413,8 +719,9 @@ export function CSVImportModal() {
     if (duplicates.length) issues.push(`Duplicate source columns: ${duplicates.join(", ")}. Choose each source only once.`);
     const unsupported = Object.values(mapping).filter((source) => source && !headers.includes(source));
     if (unsupported.length) issues.push(`Unsupported source columns: ${unsupported.join(", ")}.`);
+    if (missingColumns.length) issues.push(`Saved mapping is missing columns in this file: ${missingColumns.join(", ")}.`);
     return issues;
-  }, [headers, mapping]);
+  }, [headers, mapping, missingColumns]);
 
   return (
     <Dialog
@@ -460,7 +767,7 @@ export function CSVImportModal() {
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {step === "upload" && resumableDraft && (
+          {step === "upload" && resumableDraft && !restoredFromSession && (
             <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-medium text-blue-200">
@@ -481,6 +788,54 @@ export function CSVImportModal() {
                 className="shrink-0 text-blue-200 hover:text-white"
               >
                 Discard draft
+              </Button>
+            </div>
+          )}
+
+          {restoredFromSession && step === "upload" && (
+            <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-blue-200">
+                  Restored your import: {file?.name}
+                </p>
+                <p className="text-xs text-blue-300/80">
+                  {csvData.length} rows loaded. Nothing has been imported yet.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={discardSession}
+                className="shrink-0 text-blue-200 hover:text-white"
+              >
+                Discard import
+              </Button>
+            </div>
+          )}
+
+          {restoredFromSession && step !== "upload" && step !== "summary" && (
+            <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-blue-200">
+                  Restored your import preview: {file?.name}
+                </p>
+                <p className="text-xs text-blue-300/80">
+                  {validationResults.length} rows checked
+                  {validationResults.length
+                    ? ` · ${validationResults.filter((r) => r.isValid).length} valid, ${
+                        validationResults.filter((r) => !r.isValid).length
+                      } with errors`
+                    : ""}
+                  . Nothing has been imported yet.
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={discardSession}
+                className="shrink-0 text-blue-200 hover:text-white"
+              >
+                Discard import
               </Button>
             </div>
           )}
@@ -512,6 +867,104 @@ export function CSVImportModal() {
 
           {step === "mapping" && (
             <div className="space-y-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <p className="text-sm font-medium text-slate-200">
+                  Saved mappings
+                </p>
+                {savedMappings.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    No saved mappings yet. Map the columns below and save them
+                    by name to reuse on later imports.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {savedMappings.map((saved) => (
+                      <li
+                        key={saved.id}
+                        className="flex flex-wrap items-center gap-2 text-sm"
+                      >
+                        {editingMappingId === saved.id ? (
+                          <>
+                            <input
+                              aria-label={`Rename mapping ${saved.name}`}
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRenameMapping(saved.id)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingMappingId(null);
+                                setEditingName("");
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-slate-200">{saved.name}</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => applySavedMapping(saved)}
+                            >
+                              Apply
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditingMappingId(saved.id);
+                                setEditingName(saved.name);
+                              }}
+                            >
+                              Rename
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-300 hover:text-red-200"
+                              onClick={() => handleDeleteMapping(saved.id)}
+                            >
+                              Remove
+                            </Button>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    aria-label="Mapping name"
+                    placeholder="Mapping name"
+                    value={mappingName}
+                    onChange={(e) => setMappingName(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <Button size="sm" onClick={handleSaveMapping}>
+                    {activeMappingId ? "Update mapping" : "Save mapping"}
+                  </Button>
+                </div>
+                {missingColumns.length > 0 && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-2 text-xs text-amber-200"
+                  >
+                    Missing columns in this file: {missingColumns.join(", ")}.
+                    Re-map them below.
+                  </p>
+                )}
+              </div>
               <p className="text-sm text-slate-400">
                 Match your CSV headers to the corresponding journal fields.
               </p>
@@ -538,9 +991,12 @@ export function CSVImportModal() {
                     <select
                       id={`csv-column-map-${col}`}
                       value={mapping[col] || ""}
-                      onChange={(e) =>
-                        setMapping({ ...mapping, [col]: e.target.value })
-                      }
+                      onChange={(e) => {
+                        setMapping({ ...mapping, [col]: e.target.value });
+                        setMissingColumns((prev) =>
+                          prev.filter((c) => c !== col)
+                        );
+                      }}
                       className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">Select column...</option>
@@ -577,6 +1033,39 @@ export function CSVImportModal() {
                 </div>
               </div>
 
+              {/* #1066 — invalid rows with their field + reason; selecting one
+                  focuses the affected cell so it can be corrected in place. */}
+              {rowErrorList.length > 0 && (
+                <div className="rounded-2xl border border-red-400/20 bg-red-500/5 p-3 text-xs">
+                  <p className="mb-2 font-medium text-red-200">
+                    {rowErrorList.length} validation{" "}
+                    {rowErrorList.length === 1 ? "error" : "errors"} — select one
+                    to jump to the cell.
+                  </p>
+                  <ul className="space-y-1">
+                    {rowErrorList.slice(0, 50).map((err, i) => (
+                      <li key={`${err.rowIndex}-${err.field}-${i}`}>
+                        <button
+                          type="button"
+                          onClick={() => focusCell(err.rowIndex, err.field)}
+                          aria-label={`Row ${err.rowIndex + 1}, ${err.field}: ${err.reason}. Focus cell.`}
+                          className={cn(
+                            "w-full rounded-lg px-2 py-1 text-left text-red-200 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-400",
+                            focusedCell?.rowIndex === err.rowIndex &&
+                              focusedCell?.field === err.field &&
+                              "bg-red-500/15 ring-1 ring-red-400/40"
+                          )}
+                        >
+                          <span className="font-medium">
+                            Row {err.rowIndex + 1} · {err.field}
+                          </span>
+                          <span className="text-red-300/80"> — {err.reason}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p id="csv-preview-instructions" className="text-xs text-slate-500">
                 Use the arrow keys to move between cells, Home/End to jump to the
                 start or end of a row, and Ctrl+Home/Ctrl+End to jump to the first
@@ -633,6 +1122,15 @@ export function CSVImportModal() {
                         tabIndex: isActiveRow && activeCell.col === col ? 0 : -1,
                         "aria-colindex": col + 1,
                         onFocus: () => setActiveCell({ row: i, col }),
+                      });
+                      return (
+                        <tr
+                          key={i}
+                          aria-rowindex={rowNumber + 1}
+                          aria-rowcount={previewRowCount + 1}
+                          className={cn(!res.isValid && "bg-red-400/5")}
+                        >
+                          <td className="px-3 py-2">
                       });
                       return (
                         <tr
@@ -763,6 +1261,19 @@ export function CSVImportModal() {
               onChange={(key, resolution) =>
                 setDuplicateResolutions((prev) => ({ ...prev, [key]: resolution }))
               }
+              excludedRows={excludedDuplicateRows}
+              onToggleRow={(key, rowIndex, excluded) =>
+                setExcludedDuplicateRows((prev) => {
+                  const current = prev[key] ?? [];
+                  return {
+                    ...prev,
+                    [key]: excluded
+                      ? [...current.filter((i) => i !== rowIndex), rowIndex]
+                      : current.filter((i) => i !== rowIndex),
+                  };
+                })
+              }
+              invalidCount={validationResults.filter((r) => !r.isValid).length}
             />
           )}
 
@@ -775,8 +1286,10 @@ export function CSVImportModal() {
               <p className="text-slate-400 mb-6 max-w-sm">
                 Successfully imported <strong>{summary.imported}</strong>{" "}
                 entries.
-                {summary.skipped > 0 &&
-                  ` ${summary.skipped} rows were skipped due to validation errors.`}
+                {summary.skippedDuplicates > 0 &&
+                  ` ${summary.skippedDuplicates} duplicate rows were skipped.`}
+                {summary.skippedInvalid > 0 &&
+                  ` ${summary.skippedInvalid} rows were skipped due to validation errors.`}
               </p>
               <Button
                 onClick={() => {
@@ -800,6 +1313,7 @@ export function CSVImportModal() {
                 if (step === "mapping") setStep("upload");
                 else if (step === "preview") setStep("mapping");
                 else if (step === "duplicates") setStep("preview");
+                setRestoredFromSession(false);
               }}
               className="gap-2"
             >

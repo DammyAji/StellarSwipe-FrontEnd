@@ -15,6 +15,10 @@ export interface DuplicateGroup {
   incomingCount: number;
   /** Number of existing records that match this group. */
   existingCount: number;
+  /** Fields whose values matched and caused this group to be flagged (#1067). */
+  matchedFields?: { field: string; value: string }[];
+  /** Indices of the incoming rows that belong to this group (#1067). */
+  rowIndices?: number[];
 }
 
 export interface DuplicateResolutionStepProps {
@@ -24,6 +28,15 @@ export interface DuplicateResolutionStepProps {
   resolutions: Record<string, DuplicateResolution>;
   /** Called whenever the user changes a resolution choice. */
   onChange: (key: string, resolution: DuplicateResolution) => void;
+  /**
+   * Called when the user keeps or excludes an individual row (#1067).
+   * `excluded` is true when the row should be left out of the import.
+   */
+  onToggleRow?: (key: string, rowIndex: number, excluded: boolean) => void;
+  /** Row indices the user has excluded from the import, keyed by group. */
+  excludedRows?: Record<string, number[]>;
+  /** Number of rows that failed validation and will not be imported (#1067). */
+  invalidCount?: number;
   /**
    * Default resolution applied to newly detected groups.
    * @default "skip"
@@ -81,6 +94,9 @@ export function DuplicateResolutionStep({
   resolutions,
   onChange,
   defaultResolution = "skip",
+  onToggleRow,
+  excludedRows = {},
+  invalidCount = 0,
 }: DuplicateResolutionStepProps) {
   const [applyAll, setApplyAll] = useState<DuplicateResolution | "">("");
 
@@ -106,6 +122,19 @@ export function DuplicateResolutionStep({
 
     return { willSkip, willUpdate, willKeep };
   }, [groups, resolutions, defaultResolution]);
+
+  const excludedCount = useMemo(
+    () =>
+      groups.reduce(
+        (total, g) =>
+          total +
+          (excludedRows[g.key] ?? []).filter((i) =>
+            (g.rowIndices ?? []).includes(i)
+          ).length,
+        0
+      ),
+    [groups, excludedRows]
+  );
 
   if (groups.length === 0) {
     return (
@@ -177,6 +206,14 @@ export function DuplicateResolutionStep({
                       {group.incomingCount} incoming ·{" "}
                       {group.existingCount} existing
                     </p>
+                    {group.matchedFields && group.matchedFields.length > 0 && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Matched on:{" "}
+                        {group.matchedFields
+                          .map((f) => `${f.field} = ${f.value}`)
+                          .join(", ")}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -203,6 +240,45 @@ export function DuplicateResolutionStep({
                   ))}
                 </div>
               </div>
+
+              {/* ── Per-row keep / exclude (#1067) ─────────────────────── */}
+              {onToggleRow && (group.rowIndices?.length ?? 0) > 0 && (
+                <ul
+                  className="mt-2 space-y-1 border-t border-white/10 pt-2"
+                  aria-label={`Rows in ${group.description}`}
+                >
+                  {group.rowIndices!.map((rowIndex) => {
+                    const excluded = (excludedRows[group.key] ?? []).includes(
+                      rowIndex
+                    );
+                    return (
+                      <li
+                        key={rowIndex}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="text-muted-foreground">
+                          Row {rowIndex + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onToggleRow(group.key, rowIndex, !excluded)
+                          }
+                          aria-pressed={excluded}
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                            excluded
+                              ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-300"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                          )}
+                        >
+                          {excluded ? "Excluded" : "Keep"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           );
         })}
@@ -221,7 +297,7 @@ export function DuplicateResolutionStep({
           {summary.willSkip > 0 && (
             <li className="text-yellow-300">
               {summary.willSkip} row{summary.willSkip === 1 ? "" : "s"} will be
-              skipped
+              skipped as duplicates
             </li>
           )}
           {summary.willUpdate > 0 && (
@@ -234,6 +310,18 @@ export function DuplicateResolutionStep({
             <li className="text-foreground">
               {summary.willKeep} row{summary.willKeep === 1 ? "" : "s"} will be
               imported alongside existing records
+            </li>
+          )}
+          {excludedCount > 0 && (
+            <li className="text-yellow-300">
+              {excludedCount} duplicate row{excludedCount === 1 ? "" : "s"}{" "}
+              excluded manually
+            </li>
+          )}
+          {invalidCount > 0 && (
+            <li className="text-red-300">
+              {invalidCount} invalid row{invalidCount === 1 ? "" : "s"} will be
+              skipped (validation errors)
             </li>
           )}
         </ul>
