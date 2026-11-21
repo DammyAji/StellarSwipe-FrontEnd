@@ -22,6 +22,28 @@ Found a vulnerability? Please don't open a public issue — see
 [SECURITY.md](SECURITY.md) for how to report it privately, supported
 versions, and our disclosure policy.
 
+## Security Headers & CSP
+
+`next.config.mjs` sets HTTP security headers on every route via `async headers()`:
+`Content-Security-Policy`, `X-Frame-Options: DENY`, `Referrer-Policy:
+strict-origin-when-cross-origin` and a restrictive `Permissions-Policy`
+(camera, microphone, geolocation, sensors, payment, USB, etc. disabled).
+
+CSP sources currently allowed (update the constants in `next.config.mjs` when
+adding a third-party integration):
+
+| Directive | Sources |
+| --- | --- |
+| `script-src` | `'self' 'unsafe-inline' 'unsafe-eval'`, `https://*.sentry.io`, `https://*.ingest.sentry.io` |
+| `connect-src` | `'self'`, Sentry ingest, Stellar Horizon (`horizon.stellar.org`, `horizon-testnet.stellar.org`, `horizon-futurenet.stellar.org`), Soroban RPC (`soroban-testnet.stellar.org`, `soroban-mainnet.stellar.org`), `https://stellar.expert`, and the matching `wss://` Horizon/Soroban WebSocket origins |
+| `img-src` | `'self' data: blob: https:` (avatars, chart snapshots) |
+| `style-src` | `'self' 'unsafe-inline'` |
+| `worker-src` | `'self' blob:` (service worker / push notifications) |
+| `frame-ancestors` | `'none'` |
+
+Verify locally with `curl -I http://localhost:3000` against a production build
+(`npm run build && npm start`).
+
 ## Tech Stack
 
 - Next.js 15+ (App Router)
@@ -137,6 +159,12 @@ Budget thresholds (defined in `lighthouserc.js`):
 To adjust a budget: edit the `assertions` block in `lighthouserc.js` and document the reason in your PR.
 
 Lighthouse reports are uploaded as CI artifacts (`lighthouse-reports/`) for debugging failed runs.
+
+## Contributing
+
+We welcome contributions from external contributors. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for local setup, environment variables, dev/test/lint/e2e/Storybook commands, branch and
+commit conventions, and the pull request review process.
 
 ## Additional documentation
 

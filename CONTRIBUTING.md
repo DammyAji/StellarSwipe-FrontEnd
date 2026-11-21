@@ -8,6 +8,58 @@ Thanks for your interest in improving this project! This guide covers local setu
 2. Install dependencies for the backend and frontend as described in their respective `README` files.
 3. Copy any example environment file to a local `.env` and fill in your own values. Never commit secrets.
 
+### Frontend local setup
+
+```bash
+git clone https://github.com/AgesEmpire/StellarSwipe-FrontEnd.git
+cd StellarSwipe-FrontEnd
+npm install
+cp .env.example .env.local   # then fill in your own values
+npm run dev                  # http://localhost:3000
+```
+
+Environment variables live in `.env.local` (git-ignored). `.env.example` documents every
+supported variable — copy it and fill in only what you need. Never commit `.env.local` or any
+secret; server-only values must not be prefixed with `NEXT_PUBLIC_`.
+
+### Frontend commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Next.js dev server |
+| `npm run build` | Production build |
+| `npm run lint` | ESLint (`next lint`) |
+| `npm test` | Jest unit tests (`--no-coverage`) |
+| `npm run test:coverage` | Jest with coverage |
+| `npm run test:vitest` | Vitest suite |
+| `npm run test:e2e` | Playwright end-to-end tests |
+| `npm run test:e2e:ui` | Playwright in UI mode |
+| `npm run storybook` | Storybook dev server on port 6006 |
+| `npm run build-storybook` | Static Storybook build |
+| `npm run bundle:check` | Validate the build against the bundle budget |
+| `npm run i18n:check` | Verify translation files are in sync |
+
+Run `npm run lint`, `npm test` and `npm run test:e2e` before opening a pull request, plus
+`npm run storybook` when you change a component that has stories.
+
+### Branch naming and commits
+
+- Branch off `main`; never commit directly to `main`.
+- Name branches `<type>/<short-description>`, e.g. `feat/signal-feed-filters`,
+  `fix/quote-refresh-race`, `docs/contributing-guide`.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/):
+  `<type>(<scope>): <summary>`, e.g. `fix(trade): clamp slippage to quote bounds`.
+  Common types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
+- Keep commits focused and the PR to one logical change.
+
+### Pull request review process
+
+1. Open the PR against `main` using the PR template and link the issue it closes.
+2. Fill in the summary, the test plan, and the checklist (type-check, lint, tests, Storybook).
+3. CI must be green: lint, unit tests, e2e, bundle budget and Lighthouse checks.
+4. A maintainer reviews; address feedback with new commits (no force-push during review).
+5. Once approved and green, a maintainer merges. Document any budget increase in the PR description.
+
 ## Database migrations
 
 Schema changes are managed with **versioned, ordered migrations**. The application never alters the schema on startup — migrations are applied only through an explicit command, so production databases are never silently changed when the server boots.
@@ -185,3 +237,5 @@ describe('RolesGuard', () => {
 - Make sure new migrations are documented and tested as described above.
 - New providers and guards should ship with isolated unit tests following the conventions above.
 - Persistence changes should be covered by a database-backed integration test using the disposable-database harness described above.
+- Disclose any AI assistance in the PR description.
+- Report security vulnerabilities privately per [SECURITY.md](SECURITY.md), never in a public issue.

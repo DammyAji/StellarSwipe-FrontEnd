@@ -43,6 +43,8 @@ type Step = "upload" | "mapping" | "preview" | "duplicates" | "summary";
 
 interface ValidationResult {
   row: Record<string, any>;
+  /** 1-based row number in the uploaded file (header excluded). */
+  rowNumber: number;
   data?: JournalEntry;
   errors?: string[];
   isValid: boolean;
@@ -125,7 +127,7 @@ export function CSVImportModal() {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    if (!selectedFile.name.endsWith(".csv")) {
+    if (!selectedFile.name.toLowerCase().endsWith(".csv")) {
       toast.error("Please upload a CSV file");
       return;
     }
@@ -135,7 +137,23 @@ export function CSVImportModal() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        setCsvData(results.data);
+        const rows = (results.data as any[]).filter(
+          (row) =>
+            row &&
+            typeof row === "object" &&
+            Object.values(row).some(
+              (value) => value !== null && String(value).trim() !== ""
+            )
+        );
+
+        if (rows.length === 0) {
+          toast.error(
+            "This file is empty or is not a valid CSV. Please upload a CSV file with a header row and at least one entry."
+          );
+          return;
+        }
+
+        setCsvData(rows);
         if (results.meta.fields) {
           setHeaders(results.meta.fields);
 
@@ -179,7 +197,8 @@ export function CSVImportModal() {
     for (let i = 0; i < csvData.length; i += chunkSize) {
       const chunk = csvData.slice(i, i + chunkSize);
 
-      const chunkResults = chunk.map((row) => {
+      const chunkResults = chunk.map((row, index) => {
+        const rowNumber = i + index + 1;
         const mappedRow: any = {};
         Object.entries(mapping).forEach(([target, source]) => {
           if (source)
@@ -198,6 +217,7 @@ export function CSVImportModal() {
         const parsed = journalEntrySchema.safeParse(validationData);
         return {
           row,
+          rowNumber,
           data: parsed.success ? parsed.data : undefined,
           errors: !parsed.success
             ? parsed.error.issues.map((msg) => msg.message)
@@ -293,6 +313,13 @@ export function CSVImportModal() {
     const issues: string[] = [];
     const missing = REQUIRED_COLUMNS.filter((col) => !mapping[col]);
     if (missing.length) issues.push(`Missing required mappings: ${missing.join(", ")}.`);
+    const missingHeaders = REQUIRED_COLUMNS.filter(
+      (col) => !headers.some((h) => h.toLowerCase() === col.toLowerCase())
+    );
+    if (missingHeaders.length)
+      issues.push(
+        `Missing required columns: ${missingHeaders.join(", ")}. Add these columns to your CSV and re-upload.`
+      );
     const selected = Object.values(mapping).filter(Boolean);
     const duplicates = [...new Set(selected.filter((source, index) => selected.indexOf(source) !== index))];
     if (duplicates.length) issues.push(`Duplicate source columns: ${duplicates.join(", ")}. Choose each source only once.`);
@@ -492,6 +519,7 @@ export function CSVImportModal() {
                                 className="text-red-400 cursor-help"
                               />
                               <div className="absolute left-6 top-0 hidden group-hover:block z-10 w-48 rounded-lg bg-red-950 p-2 text-[10px] shadow-xl border border-red-400/20">
+                                <p className="font-semibold">Row {res.rowNumber}</p>
                                 {res.errors?.map((err, j) => (
                                   <p key={j}>• {err}</p>
                                 ))}

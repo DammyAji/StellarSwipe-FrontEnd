@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { isAllowedAvatarUrl } from "@/lib/avatarHosts";
 
 interface AvatarImageProps {
   /** Remote image URL. Empty/undefined triggers the fallback immediately. */
@@ -44,14 +45,18 @@ export function AvatarImage({
   quality = 75,
   priority = false,
 }: AvatarImageProps) {
+  // #436: only allowlisted hosts may be optimised by next/image; anything else
+  // (arbitrary user-supplied URL) falls back to the initials avatar.
+  const safeSrc = isAllowedAvatarUrl(src) ? src : null;
+
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(
-    src ? "loading" : "error"
+    safeSrc ? "loading" : "error"
   );
 
   // Reset when the artwork URL changes so a new image gets its own placeholder.
   useEffect(() => {
-    setStatus(src ? "loading" : "error");
-  }, [src]);
+    setStatus(safeSrc ? "loading" : "error");
+  }, [safeSrc]);
 
   const isDecorative = name === "";
   const initials = deriveInitials(name);
@@ -77,9 +82,9 @@ export function AvatarImage({
       )}
 
       {/* Actual remote image */}
-      {src && status !== "error" && (
+      {safeSrc && status !== "error" && (
         <Image
-          src={src}
+          src={safeSrc}
           alt={isDecorative ? "" : `${name} avatar`}
           width={sizePx}
           height={sizePx}
