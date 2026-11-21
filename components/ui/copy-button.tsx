@@ -13,6 +13,12 @@ export interface CopyButtonProps
   label?: string;
   /** How long (ms) the "Copied!" state persists. Default: 2000 */
   resetDelay?: number;
+  /**
+   * When true, the manual-copy fallback renders the value in a read-only,
+   * selectable input so the user can copy it by hand after a clipboard
+   * failure. Default: false (hint text only).
+   */
+  showValueOnError?: boolean;
 }
 
 /**
@@ -43,7 +49,7 @@ export interface CopyButtonProps
  * @see {@link https://storybook.stellarswipe.dev/?path=/docs/ui-copybutton--docs Storybook — CopyButton}
  */
 const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
-  ({ value, label = "Copy", resetDelay = 2000, className, ...props }, ref) => {
+  ({ value, label = "Copy", resetDelay = 2000, showValueOnError = false, className, ...props }, ref) => {
     const { copied, status, errorMessage, copy, reset } = useClipboard({ resetDelay });
 
     const isCopied = status === "copied";
@@ -113,6 +119,17 @@ const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
           >
             {errorMessage}
           </p>
+        )}
+
+        {isError && showValueOnError && (
+          <input
+            type="text"
+            readOnly
+            value={value}
+            aria-label="Copy manually"
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-full max-w-xs rounded border border-input bg-background px-2 py-1 text-[11px] text-foreground"
+          />
         )}
       </div>
     );

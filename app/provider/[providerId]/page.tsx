@@ -27,6 +27,7 @@ import { UnfollowDialog } from "@/components/UnfollowDialog";
 import { useUnfollowDialog } from "@/hooks/useUnfollowDialog";
 import { useFollowedProvidersStore } from "@/store/useFollowedProvidersStore";
 import { usePaginationClamp } from "@/hooks/usePaginationClamp";
+import { CopyButton } from "@/components/ui/copy-button";
 
 const SIGNALS_PER_PAGE = 5;
 
@@ -173,6 +174,13 @@ export default function ProviderProfilePage() {
     resetKey: providerId,
   });
   const paginatedSignals = signals.slice(offset, offset + SIGNALS_PER_PAGE);
+
+  // Canonical, shareable profile URL — no query parameters or fragments.
+  const profileUrl = useMemo(() => {
+    const path = `/provider/${encodeURIComponent(providerId ?? "")}`;
+    if (typeof window === "undefined") return path;
+    return `${window.location.origin}${path}`;
+  }, [providerId]);
 
   // Performance history range selection.
   const [range, setRange] = useState<RangeKey>("30d");
@@ -335,6 +343,21 @@ export default function ProviderProfilePage() {
           <ArrowLeft size={16} className="rtl-flip" />
           Back
         </button>
+
+        {/* Share / copy canonical profile link */}
+        <section
+          className="flex flex-wrap items-center justify-between gap-2"
+          aria-label="Share provider profile"
+        >
+          <h1 className="text-lg font-semibold text-foreground">
+            {provider.name ?? provider.address ?? "Provider profile"}
+          </h1>
+          <CopyButton
+            value={profileUrl}
+            label="Copy profile link"
+            showValueOnError
+          />
+        </section>
 
         {/* Performance history chart */}
         <section
