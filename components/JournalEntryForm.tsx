@@ -2,8 +2,21 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useTransactionStore, type TransactionHistoryItem } from "@/store/useTransactionStore";
-import { journalEntrySchema, normalizeJournalTags, type JournalEntry } from "@/lib/journalSchema";
-import { createJournalEntry, updateJournalEntry, JournalApiError } from "@/lib/journalApi";
+import {
+  journalEntrySchema,
+  normalizeJournalTags,
+  normalizeJournalLinks,
+  isSafeJournalLinkUrl,
+  MAX_JOURNAL_LINKS,
+  type JournalEntry,
+  type JournalReferenceLink,
+} from "@/lib/journalSchema";
+import {
+  createJournalEntry,
+  updateJournalEntry,
+  fetchJournalEntry,
+  JournalApiError,
+} from "@/lib/journalApi";
 import { Button } from "@/components/ui/button";
 import { ValidationSummary } from "@/components/forms/ValidationSummary";
 import { Plus, AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
@@ -15,6 +28,7 @@ import { useKeyboardInset, useKeepFocusedFieldVisible } from "@/hooks/useKeyboar
 import { JournalTagPicker } from "@/components/JournalTagPicker";
 import { useJournalDraftStore } from "@/store/useJournalDraftStore";
 import { findJournalEntryByHash } from "@/lib/journalFromTransaction";
+import { JOURNAL_TEMPLATES, applyJournalTemplate } from "@/lib/journalTemplates";
 
 type AutosaveStatus = "idle" | "saving" | "saved" | "offline" | "failed";
 
@@ -100,8 +114,15 @@ export function JournalEntryForm({
     outcome: (editEntry?.outcome as JournalEntry["outcome"]) || "PENDING",
     notes: editEntry?.notes ?? "",
     tags: editEntry?.tags ?? [],
+    links: editEntry?.links ?? [],
   });
   const [tagInput, setTagInput] = useState("");
+  // Reference links (#1064): the row being typed plus its inline errors.
+  const [linkDraft, setLinkDraft] = useState<JournalReferenceLink>({ label: "", url: "" });
+  const [linkErrors, setLinkErrors] = useState<{ label?: string; url?: string }>({});
+  // Template the current draft was started from (#1061). Purely informational:
+  // applying a template only pre-fills fields, it never saves anything.
+  const [templateId, setTemplateId] = useState("");
 
   // Transaction this draft was started from (#1118). Kept in a ref for the
   // submit callbacks and mirrored in state for the banner.
@@ -129,6 +150,9 @@ export function JournalEntryForm({
   // back the revision it was made against.
   const baseRevisionRef = useRef<number | undefined>(editEntry?.revision);
   const [hasConflict, setHasConflict] = useState(false);
+  // Newer server copy found when a save was rejected as stale. Shown to the
+  // user so they can review it instead of silently overwriting it.
+  const [conflictVersion, setConflictVersion] = useState<TransactionHistoryItem | null>(null);
   // True once the user has attempted to submit, so the validation summary
   // only appears after a failed submit — never on first render.
   const [submitted, setSubmitted] = useState(false);
@@ -254,14 +278,18 @@ export function JournalEntryForm({
   const resetForm = useCallback(() => {
     linkedRef.current = null;
     setLinkedInfo(null);
+    setTemplateId("");
     setFormData({
       date: new Date().toISOString().split("T")[0],
       type: "MANUAL",
       status: "SUCCEEDED",
       outcome: "PENDING",
       tags: [],
+      links: [],
     });
     setTagInput("");
+    setLinkDraft({ label: "", url: "" });
+    setLinkErrors({});
     setErrors({});
     setTouched({});
     setSubmitted(false);
@@ -273,6 +301,24 @@ export function JournalEntryForm({
     setRecoverableDraft(null);
     clearDraft(draftKey);
   }, [draftKey]);
+
+  /**
+   * Pre-fills the editor from a starter template (#1061). Only the fields the
+   * template defines are written; nothing is submitted and no existing entry
+   * is modified — the user still edits and saves the entry themselves.
+   */
+  const applyTemplate = useCallback(
+    (id: string) => {
+      const template = JOURNAL_TEMPLATES.find((t) => t.id === id);
+      if (!template) return;
+      setFormData((prev) => applyJournalTemplate(template, prev));
+      setTemplateId(template.id);
+      setErrors({});
+      setSubmitted(false);
+      setIsDirty(true);
+    },
+    []
+  );
 
   // ------------------------------------------------------------------
   // Core submission logic (extracted so retry does not reuse events)
@@ -514,6 +560,12 @@ export function JournalEntryForm({
         if (err instanceof JournalApiError && err.code === "CONFLICT") {
           // Edits stay in the form and draft; the user decides whether to overwrite.
           setHasConflict(true);
+          // Load the newer stored version so it can be reviewed, not just replaced.
+          try {
+            setConflictVersion(await fetchJournalEntry(entry.id));
+          } catch {
+            setConflictVersion(null);
+          }
           throw err;
         }
         toast.error("Update failed", {
@@ -540,6 +592,7 @@ export function JournalEntryForm({
       setSubmitError(null);
       setSubmitSuccess(null);
       setHasConflict(false);
+      setConflictVersion(null);
       if (autosaveStatus === "failed") setAutosaveStatus("saving");
       setSubmitted(true);
 
@@ -565,6 +618,7 @@ export function JournalEntryForm({
     setSubmitError(null);
     setSubmitSuccess(null);
     setHasConflict(false);
+    setConflictVersion(null);
     const data = validateCurrentForm();
     if (!data) return;
 
@@ -721,7 +775,29 @@ export function JournalEntryForm({
 
       {hasConflict && (
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300" data-testid="journal-conflict">
-          <span className="flex-1">Keep your edits instead of the newer version?</span>
+          <span className="flex-1">
+            This entry was changed elsewhere after you opened it. Your edits are
+            still here — review the newer version before choosing.
+          </span>
+          {conflictVersion && (
+            <dl
+              className="w-full space-y-1 text-xs text-amber-200/80"
+              data-testid="journal-conflict-newer-version"
+            >
+              <div className="flex gap-2">
+                <dt className="font-medium">Newer version:</dt>
+                <dd>
+                  {conflictVersion.assetPair} — {conflictVersion.amount}{" "}
+                  {conflictVersion.token}
+                  {conflictVersion.notes ? ` · ${conflictVersion.notes}` : ""}
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="font-medium">Saved at:</dt>
+                <dd>{new Date(conflictVersion.timestamp).toLocaleString()}</dd>
+              </div>
+            </dl>
+          )}
           <Button type="button" size="sm" onClick={overwriteConflict} disabled={isSubmitting} data-testid="journal-conflict-overwrite">
             Overwrite with my edits
           </Button>
@@ -741,6 +817,30 @@ export function JournalEntryForm({
         request is sent regardless of which path triggered submission.
       */}
       <form ref={formRef} id="journal-entry-form" onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1 sm:col-span-2">
+          <label htmlFor="journal-entry-template" className="text-xs font-medium text-slate-400">
+            Start from a template
+          </label>
+          <select
+            id="journal-entry-template"
+            value={templateId}
+            onChange={(e) => applyTemplate(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={isSubmitting}
+            aria-describedby="journal-entry-template-hint"
+          >
+            <option value="">Blank entry</option>
+            {JOURNAL_TEMPLATES.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name} — {template.description}
+              </option>
+            ))}
+          </select>
+          <p id="journal-entry-template-hint" className="text-[10px] text-slate-500">
+            Applying a template only fills in the fields below. Nothing is saved
+            until you press Save.
+          </p>
+        </div>
         <div className="space-y-1">
           <label htmlFor="journal-entry-date" className="text-xs font-medium text-slate-400">Date</label>
           <input

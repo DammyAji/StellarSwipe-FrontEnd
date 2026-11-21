@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { JournalReferenceLink } from "@/lib/journalSchema";
 
 export type TransactionStatus = "PENDING" | "SUCCEEDED" | "FAILED";
 export type TransactionOutcome = "WIN" | "LOSS" | "PENDING";
@@ -36,6 +37,8 @@ export interface TransactionHistoryItem extends TransactionDetails {
   tags?: string[];
   /** The user's own notes about the trade (never filled from the network). */
   notes?: string;
+  /** Labeled external reference links attached to the entry. */
+  links?: JournalReferenceLink[];
   /** Realized profit/loss in quote currency, when known. */
   pnl?: number;
   /** Stellar account the entry was made from, when known. */

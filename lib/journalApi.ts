@@ -139,6 +139,25 @@ export async function deleteJournalEntry(
 }
 
 /**
+ * Fetch the current server copy of a single entry.
+ *
+ * Used by the editor to detect that the stored data changed after it opened
+ * (e.g. the entry was edited in another tab) before saving over it.
+ */
+export async function fetchJournalEntry(
+  id: string
+): Promise<TransactionHistoryItem> {
+  await delay(150);
+
+  const existing = entries.get(id);
+  if (!existing) {
+    throw new JournalApiError("Journal entry not found.", "NOT_FOUND");
+  }
+
+  return { ...existing };
+}
+
+/**
  * Fetch all journal entries (for hydration from server).
  */
 export async function fetchJournalEntries(): Promise<TransactionHistoryItem[]> {
