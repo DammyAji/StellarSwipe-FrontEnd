@@ -6,6 +6,42 @@ import { usePrivacyStore, PRIVACY_MASK } from "@/store/usePrivacyStore";
 import { TrendingUp, TrendingDown, Wallet, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PortfolioEmptyState } from "@/components/PortfolioEmptyState";
+import { formatCurrency } from "@/lib/localeFormatter";
+
+/**
+ * Renders a summary value so it reflows on narrow screens instead of clipping:
+ * the value wraps at any character boundary and exposes the full, unrounded
+ * figure via a precision disclosure (title + accessible description).
+ */
+function SummaryValue({
+  value,
+  precise,
+  className,
+  label,
+  hidden,
+}: {
+  value: string;
+  precise: string;
+  className?: string;
+  label: string;
+  hidden?: boolean;
+}) {
+  return (
+    <p
+      className={cn(
+        "min-w-0 break-words text-sm font-semibold leading-tight [overflow-wrap:anywhere]",
+        className
+      )}
+      title={hidden ? undefined : precise}
+      aria-label={hidden ? `${label} hidden` : undefined}
+    >
+      {value}
+      {!hidden && precise !== value && (
+        <span className="sr-only"> (full precision: {precise})</span>
+      )}
+    </p>
+  );
+}
 
 export function PortfolioSummaryCards() {
   const { assets, totalValue, totalRealizedPnL, totalUnrealizedPnL, isLoading } =
@@ -43,12 +79,23 @@ export function PortfolioSummaryCards() {
     {
       label: "Balance",
       value: mask(formatCurrency(totalValue)),
+      precise: mask(
+        new Intl.NumberFormat(undefined, {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 8,
+        }).format(totalValue)
+      ),
       icon: Wallet,
       className: "text-accent-sky",
     },
     {
       label: "Total P/L",
       value: mask(`${isPositive ? "+" : ""}$${Math.abs(totalPnL).toFixed(2)}`),
+      precise: mask(
+        `${isPositive ? "+" : "-"}$${Math.abs(totalPnL).toFixed(8)}`
+      ),
       sub: mask(`${isPositive ? "+" : ""}${pnlPercent.toFixed(2)}%`),
       icon: isPositive ? TrendingUp : TrendingDown,
       className: isPositive ? "text-accent-success" : "text-accent-danger",
@@ -56,6 +103,7 @@ export function PortfolioSummaryCards() {
     {
       label: "Positions",
       value: String(activePositions),
+      precise: String(activePositions),
       sub: `${assets.length} asset${assets.length !== 1 ? "s" : ""}`,
       icon: BarChart2,
       className: "text-accent-market",
@@ -68,20 +116,27 @@ export function PortfolioSummaryCards() {
         <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
           Portfolio snapshot
         </p>
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          {stats.map(({ label, value, sub, icon: Icon, className }) => (
-            <div key={label} className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:grid-cols-3 sm:gap-4">
+          {stats.map(({ label, value, precise, sub, icon: Icon, className }) => (
+            <div key={label} className="flex min-w-0 flex-col gap-1">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <Icon size={13} className={cn("shrink-0", className)} aria-hidden="true" />
-                <span className="text-[11px] text-muted-foreground">{label}</span>
+                <span className="min-w-0 break-words text-[11px] text-muted-foreground">
+                  {label}
+                </span>
               </div>
-              <p
-                className={cn("text-sm font-semibold leading-tight", className)}
-                aria-label={privacyMode ? `${label} hidden` : undefined}
-              >
-                {value}
-              </p>
-              {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+              <SummaryValue
+                value={value}
+                precise={precise}
+                className={className}
+                label={label}
+                hidden={privacyMode}
+              />
+              {sub && (
+                <p className="min-w-0 break-words text-[11px] text-muted-foreground [overflow-wrap:anywhere]">
+                  {sub}
+                </p>
+              )}
             </div>
           ))}
         </div>

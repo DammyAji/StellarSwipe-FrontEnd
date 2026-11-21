@@ -9,6 +9,8 @@ import { usePortfolioStore } from "@/store/usePortfolioStore";
 import { useXLMPriceHistory } from "@/hooks/usePriceHistory";
 import {
   computeBenchmarkSeries,
+  detectIntervalGaps,
+  type IntervalGapReport,
   type PortfolioValuePoint,
 } from "@/lib/benchmark";
 import { cn } from "@/lib/utils";
@@ -83,7 +85,8 @@ interface PortfolioPerformanceBenchmarkChartProps {
 
 function createSmoothPath(
   points: { x: number; y: number }[],
-  height: number
+  height: number,
+  breakBefore: boolean[] = []
 ): string {
   if (points.length === 0) return "";
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
@@ -91,9 +94,17 @@ function createSmoothPath(
   let path = `M ${points[0].x} ${points[0].y}`;
 
   for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)];
     const p1 = points[i];
     const p2 = points[i + 1];
+
+    // #1049: never draw a segment across an interval with no data — that would
+    // present an interpolated value as real performance.
+    if (breakBefore[i + 1]) {
+      path += ` M ${p2.x} ${p2.y}`;
+      continue;
+    }
+
+    const p0 = points[Math.max(0, i - 1)];
     const p3 = points[Math.min(points.length - 1, i + 2)];
 
     const cp1x = p1.x + (p2.x - p0.x) / 6;
@@ -105,6 +116,22 @@ function createSmoothPath(
   }
 
   return path;
+}
+
+function formatGapDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function describeGapReport(report: IntervalGapReport, label: string): string {
+  if (report.gaps.length === 0) return "";
+  const ranges = report.gaps
+    .map((gap) => `${formatGapDate(gap.from)} – ${formatGapDate(gap.to)}`)
+    .join(", ");
+  const unit = report.missingIntervals === 1 ? "interval" : "intervals";
+  return `${label}: ${report.missingIntervals} ${unit} with no data (${ranges}). The line is broken across these gaps instead of interpolating values.`;
 }
 
 export function PortfolioPerformanceBenchmarkChart({
@@ -223,6 +250,27 @@ export function PortfolioPerformanceBenchmarkChart({
         initialPortfolioValue
       );
     }, [portfolioHistory, xlmHistory, totalValue]);
+
+  // #1049: detect intervals with no data so the chart can explain them and
+  // avoid drawing interpolated values as real performance.
+  const expectedIntervalMs = useMemo(() => {
+    const intervalMs =
+      intervalMeta.historyInterval === "hour"
+        ? 3_600_000
+        : intervalMeta.historyInterval === "week"
+          ? 604_800_000
+          : 86_400_000;
+    return intervalMs;
+  }, [intervalMeta.historyInterval]);
+
+  const portfolioGaps = useMemo(
+    () => detectIntervalGaps(portfolioPoints, expectedIntervalMs),
+    [portfolioPoints, expectedIntervalMs]
+  );
+  const benchmarkGaps = useMemo(
+    () => detectIntervalGaps(benchmarkPoints, expectedIntervalMs),
+    [benchmarkPoints, expectedIntervalMs]
+  );
 
   const chartData = useMemo(() => {
     if (portfolioPoints.length === 0) {

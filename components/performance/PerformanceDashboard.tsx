@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Component, useCallback, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Activity,
@@ -15,6 +15,8 @@ import {
 import { usePerformanceMonitoringStore } from "@/store/usePerformanceMonitoringStore";
 import type { NetworkConnectionType } from "@/lib/performance/types";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
 import { TableDensityControl } from "@/components/TableDensityControl";
 import { usePerformanceTableDensity } from "@/store/usePerformanceTableDensityStore";
 import { TABLE_DENSITY_CLASSES, type TableDensity } from "@/lib/tableDensity";
@@ -84,17 +86,25 @@ function NetworkRow({
 }
 
 function HeatmapCanvas({ points }: { points: { x: number; y: number }[] }) {
+  if (points.length === 0) {
+    return (
+      <div className="p-3">
+        <EmptyState
+          title="No interactions recorded yet"
+          description="Interact with the app and this heatmap will populate automatically."
+          className="h-full rounded-lg bg-transparent py-6"
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative aspect-[9/16] w-full max-w-xs overflow-hidden rounded-xl border border-white/10 bg-slate-900"
       role="img"
-      aria-label={
-        points.length === 0
-          ? "Interaction heatmap: no interactions recorded yet"
-          : `Interaction heatmap: ${points.length} recorded interactions, concentrated toward ${
-              points.reduce((a, b) => a + b.y, 0) / points.length < 50 ? "the top" : "the bottom"
-            } of the screen`
-      }
+      aria-label={`Interaction heatmap: ${points.length} recorded interactions, concentrated toward ${
+        points.reduce((a, b) => a + b.y, 0) / points.length < 50 ? "the top" : "the bottom"
+      } of the screen`}
     >
       {points.map((p, i) => (
         <div
@@ -104,16 +114,115 @@ function HeatmapCanvas({ points }: { points: { x: number; y: number }[] }) {
           style={{ left: `${p.x}%`, top: `${p.y}%` }}
         />
       ))}
-      {points.length === 0 && (
-        <div className="p-3">
-          <EmptyState
-            title="No interactions recorded yet"
-            description="Interact with the app and this heatmap will populate automatically."
-            className="h-full rounded-lg bg-transparent py-6"
-          />
-        </div>
-      )}
     </div>
+  );
+}
+
+type WidgetStatus = "loading" | "ready" | "error";
+
+interface WidgetBoundaryProps {
+  title: string;
+  status: WidgetStatus;
+  onRetry: () => void;
+  children: ReactNode;
+}
+
+/**
+ * Isolates a single dashboard widget: a failure inside one widget renders a
+ * local retry state instead of taking down the whole dashboard, and retrying
+ * only re-mounts that widget.
+ */
+class WidgetBoundary extends Component<
+  WidgetBoundaryProps,
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidUpdate(prevProps: WidgetBoundaryProps) {
+    if (prevProps.status !== this.props.status && this.props.status !== "error") {
+      if (this.state.failed) this.setState({ failed: false });
+    }
+  }
+
+  private handleRetry = () => {
+    this.setState({ failed: false });
+    this.props.onRetry();
+  };
+
+  render() {
+    if (this.state.failed || this.props.status === "error") {
+      return (
+        <ErrorState
+          title={`${this.props.title} unavailable`}
+          description="This widget could not load. Other widgets are unaffected."
+          onRetry={this.handleRetry}
+          className="rounded-xl bg-transparent py-8"
+        />
+      );
+    }
+
+    if (this.props.status === "loading") {
+      return <LoadingState label={`Loading ${this.props.title.toLowerCase()}…`} variant="inline" />;
+    }
+
+    return this.props.children;
+  }
+}
+
+function useWidgetStatus() {
+  const [status, setStatus] = useState<WidgetStatus>("ready");
+
+  const retry = useCallback(() => {
+    setStatus("loading");
+    window.setTimeout(() => setStatus("ready"), 300);
+  }, []);
+
+  return { status, retry };
+}
+
+function WidgetSection({
+  title,
+  icon: Icon,
+  iconClassName = "text-sky-400",
+  isEmpty,
+  emptyTitle,
+  emptyDescription,
+  status,
+  onRetry,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconClassName?: string;
+  isEmpty: boolean;
+  emptyTitle: string;
+  emptyDescription: string;
+  status: WidgetStatus;
+  onRetry: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-5">
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
+        <Icon className={`h-4 w-4 ${iconClassName}`} />
+        {title}
+      </h2>
+      {isEmpty ? (
+        <EmptyState
+          title={emptyTitle}
+          description={emptyDescription}
+          className="rounded-xl bg-transparent py-6"
+        />
+      ) : (
+        <WidgetBoundary title={title} status={status} onRetry={onRetry}>
+          {children}
+        </WidgetBoundary>
+      )}
+    </section>
   );
 }
 
@@ -123,6 +232,10 @@ export function PerformanceDashboard() {
   const summary = usePerformanceMonitoringStore((s) => s.getSummary());
   const [tableDensity, setTableDensity] = usePerformanceTableDensity();
   const densityClasses = TABLE_DENSITY_CLASSES[tableDensity];
+  const routeWidget = useWidgetStatus();
+  const networkWidget = useWidgetStatus();
+  const heatmapWidget = useWidgetStatus();
+  const crashWidget = useWidgetStatus();
 
   const routeStats = useMemo(() => {
     const byRoute = new Map<string, number[]>();
@@ -267,113 +380,107 @@ export function PerformanceDashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Timer className="h-4 w-4 text-sky-400" />
-            Page load time by route
-          </h2>
-          {routeStats.length === 0 ? (
-            <EmptyState
-              title="No route data yet"
-              description="Route load timings will appear after you navigate through the app."
-              className="rounded-xl bg-transparent py-6"
-            />
-          ) : (
-            <table
-              className={cn("w-full border-separate", densityClasses.table)}
-              data-density={tableDensity}
-            >
-              <caption className="sr-only">Average page load time by route</caption>
-              <thead>
-                <tr>
-                  <th scope="col" className="sr-only">Route</th>
-                  <th scope="col" className="sr-only">Average load time and sample count</th>
+        <WidgetSection
+          title="Page load time by route"
+          icon={Timer}
+          isEmpty={routeStats.length === 0}
+          emptyTitle="No route data yet"
+          emptyDescription="Route load timings will appear after you navigate through the app."
+          status={routeWidget.status}
+          onRetry={routeWidget.retry}
+        >
+          <table
+            className={cn("w-full border-separate", densityClasses.table)}
+            data-density={tableDensity}
+          >
+            <caption className="sr-only">Average page load time by route</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="sr-only">Route</th>
+                <th scope="col" className="sr-only">Average load time and sample count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {routeStats.map((r) => (
+                <tr key={r.route} className="bg-white/5">
+                  <td className={cn("rounded-l-lg break-all", densityClasses.cell)}>
+                    <Link href={r.route} className="font-mono text-sky-400 hover:underline">
+                      {r.route}
+                    </Link>
+                  </td>
+                  <td className={cn("rounded-r-lg text-right tabular-nums text-foreground", densityClasses.cell)}>
+                    {r.avgMs} ms · {r.count}×
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {routeStats.map((r) => (
-                  <tr key={r.route} className="bg-white/5">
-                    <td className={cn("rounded-l-lg break-all", densityClasses.cell)}>
-                      <Link href={r.route} className="font-mono text-sky-400 hover:underline">
-                        {r.route}
-                      </Link>
-                    </td>
-                    <td className={cn("rounded-r-lg text-right tabular-nums text-foreground", densityClasses.cell)}>
-                      {r.avgMs} ms · {r.count}×
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+              ))}
+            </tbody>
+          </table>
+        </WidgetSection>
 
-        <section className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <Wifi className="h-4 w-4 text-sky-400" />
-            Network type impact
-          </h2>
-          {summary.apiResponses.length === 0 ? (
-            <EmptyState
-              title="No API data yet"
-              description="API response metrics will appear once requests are captured."
-              className="rounded-xl bg-transparent py-6"
-            />
-          ) : (
-            <table
-              className={cn("w-full border-separate", densityClasses.table)}
-              data-density={tableDensity}
-            >
-              <caption className="sr-only">API calls and average response time by network type</caption>
-              <thead>
-                <tr>
-                  <th scope="col" className="sr-only">Network type</th>
-                  <th scope="col" className="sr-only">Call count and average response time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(Object.entries(summary.networkBreakdown) as [
-                  NetworkConnectionType,
-                  { count: number; avgApiMs: number },
-                ][])
-                  .filter(([, v]) => v.count > 0)
-                  .map(([type, stats]) => (
-                    <NetworkRow
-                      key={type}
-                      type={type}
-                      count={stats.count}
-                      avgApiMs={stats.avgApiMs}
-                      density={tableDensity}
-                    />
-                  ))}
-              </tbody>
-            </table>
-          )}
-        </section>
+        <WidgetSection
+          title="Network type impact"
+          icon={Wifi}
+          isEmpty={summary.apiResponses.length === 0}
+          emptyTitle="No API data yet"
+          emptyDescription="API response metrics will appear once requests are captured."
+          status={networkWidget.status}
+          onRetry={networkWidget.retry}
+        >
+          <table
+            className={cn("w-full border-separate", densityClasses.table)}
+            data-density={tableDensity}
+          >
+            <caption className="sr-only">API calls and average response time by network type</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="sr-only">Network type</th>
+                <th scope="col" className="sr-only">Call count and average response time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.entries(summary.networkBreakdown) as [
+                NetworkConnectionType,
+                { count: number; avgApiMs: number },
+              ][])
+                .filter(([, v]) => v.count > 0)
+                .map(([type, stats]) => (
+                  <NetworkRow
+                    key={type}
+                    type={type}
+                    count={stats.count}
+                    avgApiMs={stats.avgApiMs}
+                    density={tableDensity}
+                  />
+                ))}
+            </tbody>
+          </table>
+        </WidgetSection>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <MousePointerClick className="h-4 w-4 text-sky-400" />
-            Interaction heatmap
-          </h2>
+        <WidgetSection
+          title="Interaction heatmap"
+          icon={MousePointerClick}
+          isEmpty={false}
+          emptyTitle="No interactions recorded yet"
+          emptyDescription="Interact with the app and this heatmap will populate automatically."
+          status={heatmapWidget.status}
+          onRetry={heatmapWidget.retry}
+        >
           <HeatmapCanvas points={summary.heatmap} />
-        </section>
+        </WidgetSection>
 
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-foreground-muted">
-            <AlertTriangle className="h-4 w-4 text-red-400" />
-            Crash reports
-          </h2>
-          {summary.crashes.length === 0 ? (
-            <EmptyState
-              title="No crashes recorded"
-              description="Great news: no crash reports were captured in this session."
-              className="rounded-xl bg-transparent py-6"
-            />
-          ) : (
-            <ul className="max-h-80 space-y-3 overflow-y-auto">
+        <WidgetSection
+          title="Crash reports"
+          icon={AlertTriangle}
+          iconClassName="text-red-400"
+          isEmpty={summary.crashes.length === 0}
+          emptyTitle="No crashes recorded"
+          emptyDescription="Great news: no crash reports were captured in this session."
+          status={crashWidget.status}
+          onRetry={crashWidget.retry}
+        >
+          <ul className="max-h-80 space-y-3 overflow-y-auto">
               {summary.crashes
                 .slice()
                 .reverse()
@@ -411,9 +518,8 @@ export function PerformanceDashboard() {
                     )}
                   </li>
                 ))}
-            </ul>
-          )}
-        </section>
+              </ul>
+        </WidgetSection>
       </div>
     </div>
   );

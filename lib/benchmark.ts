@@ -39,6 +39,63 @@ export function computeBenchmarkSeries(
   };
 }
 
+export interface IntervalGap {
+  /** Timestamp of the last point before the gap. */
+  from: number;
+  /** Timestamp of the first point after the gap. */
+  to: number;
+  /** Number of expected intervals that have no data. */
+  missingIntervals: number;
+}
+
+export interface IntervalGapReport {
+  /** Expected spacing between consecutive points, in ms. */
+  expectedIntervalMs: number;
+  gaps: IntervalGap[];
+  /** Total number of expected intervals with no data. */
+  missingIntervals: number;
+}
+
+/**
+ * Detects intervals with no data in a time series so charts can explain them
+ * instead of drawing a straight line through the hole as if it were real
+ * performance. A gap is only reported when at least one whole expected
+ * interval is missing (a 1.5x spacing is treated as a single missing slot).
+ */
+export function detectIntervalGaps(
+  points: { timestamp: number }[],
+  expectedIntervalMs: number
+): IntervalGapReport {
+  const empty: IntervalGapReport = {
+    expectedIntervalMs,
+    gaps: [],
+    missingIntervals: 0,
+  };
+  if (!Number.isFinite(expectedIntervalMs) || expectedIntervalMs <= 0) {
+    return empty;
+  }
+  if (points.length < 2) return empty;
+
+  const sorted = [...points].sort((a, b) => a.timestamp - b.timestamp);
+  const gaps: IntervalGap[] = [];
+  let missingIntervals = 0;
+
+  for (let i = 1; i < sorted.length; i++) {
+    const delta = sorted[i].timestamp - sorted[i - 1].timestamp;
+    const missing = Math.round(delta / expectedIntervalMs) - 1;
+    if (missing > 0) {
+      gaps.push({
+        from: sorted[i - 1].timestamp,
+        to: sorted[i].timestamp,
+        missingIntervals: missing,
+      });
+      missingIntervals += missing;
+    }
+  }
+
+  return { expectedIntervalMs, gaps, missingIntervals };
+}
+
 export function generateMockPortfolioHistory(
   initialValue: number,
   points: number,
