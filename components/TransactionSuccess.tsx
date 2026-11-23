@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, ArrowRight, Eye, X, Bell, BellOff, Download } from "lucide-react";
+import { CheckCircle, ArrowRight, Eye, X, Bell, BellOff, Download, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CopyButton } from "@/components/ui/copy-button";
+import { useClipboard } from "@/hooks/useClipboard";
 import { useTransactionStore } from "@/store/useTransactionStore";
 import { useToastStore } from "@/store/useToastStore";
 import { getExplorerTxUrl, normalizeNetwork } from "@/lib/stellar/explorer";
@@ -22,6 +22,10 @@ export function TransactionSuccess() {
   const enqueueToast = useToastStore((state) => state.enqueue);
   const { alertsEnabled, toggleAlerts, categoryPreferences } =
     useNotificationPreference();
+  const { copy, copied, errorMessage } = useClipboard();
+  const hashRef = useRef<HTMLSpanElement>(null);
+  const [copyAnnouncement, setCopyAnnouncement] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
 
   const handleViewPortfolio = useCallback(() => {
     clearSuccess();
@@ -40,6 +44,31 @@ export function TransactionSuccess() {
   const handleContinueSwiping = useCallback(
     () => clearSuccess(),
     [clearSuccess]
+  );
+
+  const handleCopyHash = useCallback(
+    async (hash: string) => {
+      setCopyFailed(false);
+      const ok = await copy(hash);
+      if (ok) {
+        setCopyAnnouncement("Transaction hash copied to clipboard.");
+        toast.success("Transaction hash copied");
+      } else {
+        setCopyFailed(true);
+        setCopyAnnouncement(
+          "Couldn't copy transaction hash. The hash is selected for manual copying."
+        );
+        hashRef.current?.focus();
+        const selection = window.getSelection();
+        if (selection && hashRef.current) {
+          const range = document.createRange();
+          range.selectNodeContents(hashRef.current);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    },
+    [copy]
   );
 
   useEffect(() => {
@@ -79,7 +108,9 @@ export function TransactionSuccess() {
   if (!success) return null;
 
   const hash = success.hash?.trim() || null;
-  const truncatedHash = hash ? `${hash.slice(0, 8)}...${hash.slice(-6)}` : null;
+  const isConfirmed =
+    success.status === "success" || success.status === "confirmed";
+  const copyableHash = isConfirmed && hash ? hash : null;
   const network = success.network ?? process.env.NEXT_PUBLIC_STELLAR_NETWORK;
   const explorerUrl = getExplorerTxUrl(hash, network);
   const networkLabel = normalizeNetwork(network) === "testnet" ? "Testnet" : "Mainnet";
@@ -192,26 +223,58 @@ export function TransactionSuccess() {
               <DetailRow label="Fee" value={success.fee} />
               <DetailRow label="Network" value={networkLabel} />
               <DetailRow label="Time" value={time} />
-              <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-                <span className="text-xs text-foreground-subtle">
-                  Transaction
-                </span>
-                {hash && explorerUrl ? (
-                  <div className="flex items-center gap-2">
-                    <CopyButton value={hash} label="Copy hash" />
-                    <a
-                      href={explorerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs font-mono text-accent-success transition-colors hover:opacity-80"
-                    >
-                      {truncatedHash}
-                      <ArrowRight className="h-3 w-3" />
-                    </a>
-                  </div>
-                ) : (
-                  <span className="text-sm text-foreground-subtle">Unavailable</span>
+              <div className="flex flex-col gap-2 border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-foreground-subtle">
+                    Transaction
+                  </span>
+                  {copyableHash ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyHash(copyableHash)}
+                        aria-label="Copy transaction hash"
+                        className="rounded-md p-1 text-foreground-subtle transition-colors hover:bg-surface-high hover:text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4 text-accent-success" aria-hidden="true" />
+                        ) : (
+                          <Copy className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                      {explorerUrl && (
+                        <a
+                          href={explorerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-accent-success transition-colors hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          View on explorer
+                          <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-foreground-subtle">Unavailable</span>
+                  )}
+                </div>
+                {copyableHash && (
+                  <span
+                    ref={hashRef}
+                    tabIndex={0}
+                    className="select-all break-all rounded-md bg-surface-high px-2 py-1 text-xs font-mono text-foreground-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {copyableHash}
+                  </span>
                 )}
+                {copyFailed && errorMessage && (
+                  <p className="text-xs text-accent-danger" role="alert">
+                    {errorMessage}
+                  </p>
+                )}
+                <span aria-live="polite" className="sr-only">
+                  {copyAnnouncement}
+                </span>
               </div>
             </motion.div>
 

@@ -116,6 +116,153 @@ export function hasSufficientHistoryForDailyMovements(
 }
 
 /**
+ * A single day in the calendar heatmap series.
+ *
+ * Days with no portfolio data are represented with `available: false` and
+ * `changePercent: null` — they are never coerced to a zero return.
+ */
+export interface DailyReturnDay {
+  /** Start of the day (local time), epoch ms. */
+  day: number;
+  /** True when the day has an actual computed return. */
+  available: boolean;
+  /** Percentage change from previous day, or null when unavailable. */
+  changePercent: number | null;
+  /** Absolute change from previous day, or null when unavailable. */
+  change: number | null;
+  /** Portfolio value at the end of the day, or null when unavailable. */
+  value: number | null;
+}
+
+/**
+ * Build a day-by-day series of daily returns over a date range.
+ *
+ * Every calendar day between `startDay` and `endDay` (inclusive, local time)
+ * is included exactly once. Days with a computed movement are marked
+ * `available: true`; days without data are marked `available: false` with
+ * null values, so missing days are never presented as zero-return days.
+ *
+ * @param movements - Array of daily movements (from calculateDailyMovements)
+ * @param startDay - Start of the range (epoch ms, any time within the day)
+ * @param endDay - End of the range (epoch ms, any time within the day)
+ * @returns Array of days sorted ascending, or an empty array for an invalid range
+ */
+export function buildDailyReturnSeries(
+  movements: DailyMovement[],
+  startDay: number,
+  endDay: number
+): DailyReturnDay[] {
+  const start = toDayKey(startDay);
+  const end = toDayKey(endDay);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return [];
+  }
+
+  const byDay = new Map<number, DailyMovement>();
+  for (const m of movements) {
+    byDay.set(toDayKey(m.day), m);
+  }
+
+  const series: DailyReturnDay[] = [];
+  const cursor = new Date(start);
+  // Guard against runaway loops on absurd ranges.
+  const maxDays = 366 * 5;
+  let count = 0;
+
+  while (cursor.getTime() <= end && count < maxDays) {
+    const day = cursor.getTime();
+    const movement = byDay.get(day);
+    if (movement) {
+      series.push({
+        day,
+        available: true,
+        changePercent: movement.changePercent,
+        change: movement.change,
+        value: movement.value,
+      });
+    } else {
+      series.push({
+        day,
+        available: false,
+        changePercent: null,
+        change: null,
+        value: null,
+      });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    count++;
+  }
+
+  return series;
+}
+
+/**
+ * Intensity bucket for a heatmap cell.
+ * - `missing`: no data for the day (distinct from zero)
+ * - `zero`: an available day with exactly zero return
+ * - `pos-1`..`pos-4`: increasing positive return intensity
+ * - `neg-1`..`neg-4`: increasing negative return intensity
+ */
+export type HeatmapBucket =
+  | "missing"
+  | "zero"
+  | "pos-1"
+  | "pos-2"
+  | "pos-3"
+  | "pos-4"
+  | "neg-1"
+  | "neg-2"
+  | "neg-3"
+  | "neg-4";
+
+/**
+ * Compute the maximum absolute daily return across available days.
+ * Returns 0 when there are no available days with a non-zero return.
+ */
+export function getMaxAbsDailyReturn(series: DailyReturnDay[]): number {
+  let max = 0;
+  for (const d of series) {
+    if (d.available && d.changePercent !== null) {
+      const abs = Math.abs(d.changePercent);
+      if (abs > max) max = abs;
+    }
+  }
+  return max;
+}
+
+/**
+ * Map a daily return to a heatmap intensity bucket.
+ *
+ * Missing days map to `missing` and are never treated as zero. Available days
+ * with a zero return map to `zero`. Non-zero returns are split into four
+ * intensity levels relative to `maxAbs` (the largest absolute return in the
+ * series); when `maxAbs` is 0 or not provided, any non-zero return falls into
+ * the lowest intensity bucket.
+ *
+ * @param day - A day from buildDailyReturnSeries
+ * @param maxAbs - Maximum absolute return used to scale intensity
+ */
+export function getHeatmapBucket(
+  day: DailyReturnDay,
+  maxAbs: number
+): HeatmapBucket {
+  if (!day.available || day.changePercent === null) return "missing";
+  const value = day.changePercent;
+  if (value === 0) return "zero";
+
+  const scale = maxAbs > 0 ? maxAbs : 0;
+  let level = 1;
+  if (scale > 0) {
+    const ratio = Math.min(Math.abs(value) / scale, 1);
+    level = Math.min(4, Math.max(1, Math.ceil(ratio * 4)));
+  }
+
+  return value > 0
+    ? (`pos-${level}` as HeatmapBucket)
+    : (`neg-${level}` as HeatmapBucket);
+}
+
+/**
  * Normalize a timestamp to the start of its calendar day (local time).
  */
 function toDayKey(timestamp: number): number {

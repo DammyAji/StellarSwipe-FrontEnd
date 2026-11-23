@@ -31,6 +31,39 @@ export interface BenchmarkDefinition {
   status: BenchmarkStatus;
   /** Reason shown when the benchmark is stale or unavailable. */
   statusReason?: string;
+  /** Fee assumptions applied to derive the fee-adjusted benchmark series. */
+  feeAssumptions?: BenchmarkFeeAssumptions;
+}
+
+/**
+ * Fee inputs used to derive a fee-adjusted benchmark series (#1112). Values are
+ * expressed as decimal fractions (0.001 = 10 bps) so they can be applied
+ * directly to returns.
+ */
+export interface BenchmarkFeeAssumptions {
+  /** Annual management/expense fee charged by the benchmark vehicle. */
+  managementFee: number;
+  /** Per-trade fee applied when rebalancing or transacting. */
+  tradingFee: number;
+  /** Annualised slippage/spread cost assumed on top of trading fees. */
+  slippage: number;
+  /** How often the benchmark is rebalanced, used to annualise trading costs. */
+  rebalanceFrequency: "none" | "monthly" | "quarterly" | "annually";
+  /** Free-form note surfaced alongside the adjusted values. */
+  note?: string;
+}
+
+export type FeeDataStatus = "complete" | "partial" | "unavailable";
+
+export interface BenchmarkFeeInfo {
+  /** Whether every fee input needed for an adjusted series is present. */
+  status: FeeDataStatus;
+  /** The assumptions that are available (may be a subset). */
+  assumptions: Partial<BenchmarkFeeAssumptions>;
+  /** Human-readable list of the inputs that are missing. */
+  missingInputs: string[];
+  /** True only when an adjusted series can be computed without guessing. */
+  canAdjust: boolean;
 }
 
 export const DEFAULT_BENCHMARK_ID = "xlm";
@@ -51,6 +84,13 @@ export const BENCHMARKS: BenchmarkDefinition[] = [
     updateFrequency: "Every 5 minutes",
     lastUpdated: Date.now() - 5 * 60 * 1000,
     status: "available",
+    feeAssumptions: {
+      managementFee: 0,
+      tradingFee: 0.001,
+      slippage: 0.0005,
+      rebalanceFrequency: "none",
+      note: "Spot XLM has no management fee; DEX trading fees and spread are included.",
+    },
   },
   {
     id: "yxlm",
@@ -65,6 +105,13 @@ export const BENCHMARKS: BenchmarkDefinition[] = [
     updateFrequency: "Every 15 minutes",
     lastUpdated: Date.now() - 20 * 60 * 1000,
     status: "available",
+    feeAssumptions: {
+      managementFee: 0.01,
+      tradingFee: 0.001,
+      slippage: 0.0005,
+      rebalanceFrequency: "none",
+      note: "1% annual management fee plus DEX trading costs.",
+    },
   },
   {
     id: "aqua",
@@ -80,6 +127,13 @@ export const BENCHMARKS: BenchmarkDefinition[] = [
     lastUpdated: Date.now() - 7 * HOUR,
     status: "stale",
     statusReason: "The source has not published a new value in over 6 hours.",
+    feeAssumptions: {
+      managementFee: 0.02,
+      tradingFee: 0.003,
+      slippage: 0.001,
+      rebalanceFrequency: "monthly",
+      note: "2% annual management fee; monthly rebalancing costs are annualised.",
+    },
   },
   {
     id: "usdc",
@@ -94,6 +148,13 @@ export const BENCHMARKS: BenchmarkDefinition[] = [
     updateFrequency: "Daily",
     lastUpdated: Date.now() - 3 * HOUR,
     status: "available",
+    feeAssumptions: {
+      managementFee: 0,
+      tradingFee: 0,
+      slippage: 0,
+      rebalanceFrequency: "none",
+      note: "Cash-equivalent baseline; no fees applied.",
+    },
   },
   {
     id: "stellar-top10",
@@ -109,6 +170,12 @@ export const BENCHMARKS: BenchmarkDefinition[] = [
     lastUpdated: Date.now() - 30 * HOUR,
     status: "unavailable",
     statusReason: "The index provider is temporarily not publishing data.",
+    feeAssumptions: {
+      managementFee: 0.005,
+      tradingFee: 0.002,
+      rebalanceFrequency: "monthly",
+      note: "0.5% annual management fee; slippage is not published by the provider.",
+    },
   },
 ];
 
@@ -125,6 +192,104 @@ export function getBenchmark(id: string | null | undefined): BenchmarkDefinition
 
 export function isBenchmarkUsable(benchmark: BenchmarkDefinition | undefined): boolean {
   return Boolean(benchmark) && benchmark!.status !== "unavailable";
+}
+
+const FEE_INPUT_LABELS: Record<keyof BenchmarkFeeAssumptions, string> = {
+  managementFee: "management fee",
+  tradingFee: "trading fee",
+  slippage: "slippage",
+  rebalanceFrequency: "rebalance frequency",
+  note: "note",
+};
+
+const REQUIRED_FEE_INPUTS: (keyof BenchmarkFeeAssumptions)[] = [
+  "managementFee",
+  "tradingFee",
+  "slippage",
+  "rebalanceFrequency",
+];
+
+/**
+ * Reports which fee inputs are available for a benchmark so the comparison UI
+ * can disclose incomplete fee data instead of presenting adjusted values as
+ * fact (#1112).
+ */
+export function getBenchmarkFeeInfo(
+  benchmark: BenchmarkDefinition | undefined
+): BenchmarkFeeInfo {
+  const assumptions = benchmark?.feeAssumptions ?? {};
+  const missingInputs = REQUIRED_FEE_INPUTS.filter(
+    (key) => assumptions[key] === undefined || assumptions[key] === null
+  ).map((key) => FEE_INPUT_LABELS[key]);
+
+  const presentCount = REQUIRED_FEE_INPUTS.length - missingInputs.length;
+  let status: FeeDataStatus;
+  if (presentCount === REQUIRED_FEE_INPUTS.length) status = "complete";
+  else if (presentCount === 0) status = "unavailable";
+  else status = "partial";
+
+  return {
+    status,
+    assumptions,
+    missingInputs,
+    canAdjust: status === "complete",
+  };
+}
+
+/** True when a fee-adjusted series can be derived without guessing inputs. */
+export function hasCompleteFeeData(
+  benchmark: BenchmarkDefinition | undefined
+): boolean {
+  return getBenchmarkFeeInfo(benchmark).canAdjust;
+}
+
+/**
+ * Disclosure text describing the fee assumptions behind an adjusted series.
+ * Always states that adjusted values are estimates and names any missing
+ * inputs so incomplete fee data is never hidden.
+ */
+export function formatBenchmarkFeeDisclosure(
+  benchmark: BenchmarkDefinition | undefined
+): string {
+  const info = getBenchmarkFeeInfo(benchmark);
+  const { assumptions } = info;
+
+  if (info.status === "unavailable") {
+    return "Fee-adjusted values are unavailable: no fee assumptions are published for this benchmark. Showing gross values only.";
+  }
+
+  const parts: string[] = [];
+  if (assumptions.managementFee !== undefined) {
+    parts.push(`${formatPercent(assumptions.managementFee)} annual management fee`);
+  }
+  if (assumptions.tradingFee !== undefined) {
+    parts.push(`${formatPercent(assumptions.tradingFee)} per-trade fee`);
+  }
+  if (assumptions.slippage !== undefined) {
+    parts.push(`${formatPercent(assumptions.slippage)} slippage`);
+  }
+  if (assumptions.rebalanceFrequency !== undefined) {
+    parts.push(
+      assumptions.rebalanceFrequency === "none"
+        ? "no rebalancing"
+        : `${assumptions.rebalanceFrequency} rebalancing`
+    );
+  }
+
+  const summary = parts.length > 0 ? parts.join(", ") : "no fee inputs";
+  const note = assumptions.note ? ` ${assumptions.note}` : "";
+
+  if (info.status === "partial") {
+    return `Adjusted values are estimates based on ${summary}.${note} Incomplete fee data: ${info.missingInputs.join(", ")} not published, so adjusted values may be overstated.`;
+  }
+
+  return `Adjusted values are estimates based on ${summary}.${note}`;
+}
+
+function formatPercent(value: number): string {
+  const pct = value * 100;
+  const rounded = Math.round(pct * 100) / 100;
+  return `${rounded}%`;
 }
 
 /** Case-insensitive search across label, name, group and source. */

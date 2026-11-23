@@ -90,6 +90,113 @@ export function getChartColors(palette: ChartPalette): ChartColors {
   return PALETTES[palette] ?? PALETTES.default;
 }
 
+/**
+ * Intensity bucket for a single day in the calendar heatmap.
+ *
+ * `missing` is deliberately distinct from `zero`: a day with no data must
+ * never be presented as a zero-return day.
+ */
+export type HeatmapBucket =
+  | "missing"
+  | "zero"
+  | "gain-low"
+  | "gain-mid"
+  | "gain-high"
+  | "loss-low"
+  | "loss-mid"
+  | "loss-high";
+
+export interface HeatmapBucketStyle {
+  /** Fill color for the day cell. */
+  fill: string;
+  /** SVG <pattern> id overlay (empty string = solid fill). */
+  patternId: string;
+  /** Screen-reader-friendly description of the bucket. */
+  label: string;
+}
+
+/** Return thresholds (absolute daily return, as a fraction) for bucket edges. */
+const HEATMAP_THRESHOLDS = {
+  low: 0.005,
+  mid: 0.02,
+} as const;
+
+const HEATMAP_BUCKETS: Record<HeatmapBucket, HeatmapBucketStyle> = {
+  missing: {
+    fill: "transparent",
+    patternId: "pattern-heatmap-missing",
+    label: "no data",
+  },
+  zero: {
+    fill: "#e5e7eb",
+    patternId: "",
+    label: "no change",
+  },
+  "gain-low": {
+    fill: "#bbf7d0",
+    patternId: "",
+    label: "small gain",
+  },
+  "gain-mid": {
+    fill: "#4ade80",
+    patternId: "",
+    label: "moderate gain",
+  },
+  "gain-high": {
+    fill: "#15803d",
+    patternId: "",
+    label: "large gain",
+  },
+  "loss-low": {
+    fill: "#fecaca",
+    patternId: "",
+    label: "small loss",
+  },
+  "loss-mid": {
+    fill: "#f87171",
+    patternId: "",
+    label: "moderate loss",
+  },
+  "loss-high": {
+    fill: "#b91c1c",
+    patternId: "",
+    label: "large loss",
+  },
+};
+
+/**
+ * Map a daily return (as a fraction, e.g. 0.012 = +1.2%) to a heatmap bucket.
+ * `null`/`undefined`/non-finite values map to `missing`, never to `zero`.
+ */
+export function getHeatmapBucket(
+  dailyReturn: number | null | undefined,
+): HeatmapBucket {
+  if (dailyReturn == null || !Number.isFinite(dailyReturn)) return "missing";
+  if (dailyReturn === 0) return "zero";
+  const magnitude = Math.abs(dailyReturn);
+  const level =
+    magnitude < HEATMAP_THRESHOLDS.low
+      ? "low"
+      : magnitude < HEATMAP_THRESHOLDS.mid
+        ? "mid"
+        : "high";
+  return `${dailyReturn > 0 ? "gain" : "loss"}-${level}` as HeatmapBucket;
+}
+
+/** Style (color, pattern overlay, text label) for a heatmap bucket. */
+export function getHeatmapBucketStyle(
+  bucket: HeatmapBucket,
+): HeatmapBucketStyle {
+  return HEATMAP_BUCKETS[bucket] ?? HEATMAP_BUCKETS.missing;
+}
+
+/** Convenience: bucket style for a raw daily return value. */
+export function getHeatmapStyleForReturn(
+  dailyReturn: number | null | undefined,
+): HeatmapBucketStyle {
+  return getHeatmapBucketStyle(getHeatmapBucket(dailyReturn));
+}
+
 /** Chart colors for the user's persisted palette preference. */
 export function useChartColors(): ChartColors {
   const palette = useThemeStore((s) => s.chartPalette);
