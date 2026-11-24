@@ -7,6 +7,8 @@ import {
   formatCompactNumber,
   formatCount,
   formatWithUnit,
+  formatDateTime as baseDateTime,
+  parseLocalDateTimeInput,
   type FormatterOptions,
 } from "@/lib/localeFormatter";
 
@@ -71,6 +73,13 @@ export function useLocaleFormatter() {
     []
   );
 
+  const formatDateTime = useCallback(
+    (value: Date | number | string, options?: Intl.DateTimeFormatOptions) => {
+      return baseDateTime(value, locale, options);
+    },
+    [locale]
+  );
+
   // Return memoized formatter object
   return useMemo(
     () => ({
@@ -80,8 +89,19 @@ export function useLocaleFormatter() {
       formatCompact: compact,
       formatCount: count,
       formatWithUnit: withUnit,
+      formatDateTime,
+      parseLocalDateTimeInput,
       isInitialized,
     }),
-    [formatCurrency, formatPercent, formatNumber, compact, count, withUnit, isInitialized]
+    [
+      formatCurrency,
+      formatPercent,
+      formatNumber,
+      compact,
+      count,
+      withUnit,
+      formatDateTime,
+      isInitialized,
+    ]
   );
 }

@@ -14,16 +14,24 @@ import { cn } from "@/lib/utils";
 import type { Signal } from "@/lib/types";
 import {
   FilterDirection,
+  FilterScope,
   useSignalFilterStore,
   useSignalFilterHydrated,
 } from "@/store/useSignalFilterStore";
 import { SavedFiltersPanel } from "@/components/SavedFiltersPanel";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useSegmentedControlKeyboard } from "@/hooks/useSegmentedControlKeyboard";
 
 const DIRECTIONS: { label: string; value: FilterDirection }[] = [
   { label: "All", value: "ALL" },
   { label: "Buy", value: "BUY" },
   { label: "Sell", value: "SELL" },
+];
+
+const SCOPES: { label: string; value: FilterScope }[] = [
+  { label: "Active", value: "ACTIVE" },
+  { label: "Archived", value: "ARCHIVED" },
+  { label: "All", value: "ALL" },
 ];
 
 interface SignalFeedFiltersProps {
@@ -97,12 +105,14 @@ export function SignalFeedFilters({
     direction,
     asset,
     provider,
+    scope,
     bookmarkedOnly,
     followedOnly,
     presets,
     setDirection,
     setAsset,
     setProvider,
+    setScope,
     setBookmarkedOnly,
     setFollowedOnly,
     savePreset,
@@ -117,6 +127,15 @@ export function SignalFeedFilters({
   const [presetName, setPresetName] = useState("");
   const [showPresetInput, setShowPresetInput] = useState(false);
   const [savedFiltersOpen, setSavedFiltersOpen] = useState(false);
+
+  // Roving tabindex + arrow-key navigation for the scope segmented control.
+  const scopeKeyboard = useSegmentedControlKeyboard({
+    count: SCOPES.length,
+    selectedIndex: Math.max(
+      0,
+      SCOPES.findIndex((s) => s.value === scope)
+    ),
+  });
 
   // F — focus the filter section without triggering any search or submit.
   // Does not fire while the user is typing in a text field (handled by
@@ -178,6 +197,7 @@ export function SignalFeedFilters({
     direction !== "ALL" ||
     asset !== "" ||
     provider !== "" ||
+    scope !== "ACTIVE" ||
     bookmarkedOnly ||
     followedOnly;
 
@@ -186,6 +206,7 @@ export function SignalFeedFilters({
     direction !== "ALL",
     asset !== "",
     provider !== "",
+    scope !== "ACTIVE",
     bookmarkedOnly,
     followedOnly,
   ].filter(Boolean).length;
@@ -257,6 +278,45 @@ export function SignalFeedFilters({
           <SavedFiltersPanel />
         </div>
       )}
+
+      {/* Signal scope — Active / Archived / All. Stacked on narrow screens. */}
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <span
+          id="signal-scope-label"
+          className="text-[11px] font-medium text-foreground-muted uppercase tracking-wide"
+        >
+          Signals
+        </span>
+        <div
+          role="radiogroup"
+          aria-labelledby="signal-scope-label"
+          aria-description="Use arrow keys to switch between active, archived, and all signals"
+          className="inline-flex w-full rounded-full border border-border bg-surface p-0.5 sm:w-auto"
+        >
+          {SCOPES.map(({ label, value }, idx) => {
+            const isSelected = scope === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                tabIndex={scopeKeyboard.getTabIndex(idx)}
+                onClick={() => setScope(value)}
+                onKeyDown={(e) => scopeKeyboard.handleKeyDown(e, idx)}
+                className={cn(
+                  "flex-1 rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface sm:flex-none",
+                  isSelected
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/50"
+                    : "border border-transparent text-foreground-muted hover:text-foreground hover:bg-surface-high/20"
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Quick-filter pills — bookmarked + followed + asset + provider shortcuts */}
       <div className="flex flex-wrap gap-2">
@@ -448,6 +508,8 @@ export function SignalFeedFilters({
         <p className="text-[11px] text-gray-500" aria-live="polite">
           Showing:{" "}
           {[
+            scope !== "ACTIVE" &&
+              `Signals: ${SCOPES.find((s) => s.value === scope)?.label ?? scope}`,
             direction !== "ALL" && `Direction: ${direction}`,
             asset && `Asset: ${asset}`,
             provider && `Provider: ${provider}`,

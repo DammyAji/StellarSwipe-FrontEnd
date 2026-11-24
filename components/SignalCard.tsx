@@ -28,6 +28,10 @@ import { SignalQuoteMeta } from "@/components/SignalQuoteMeta";
 import { TradeSkeleton } from "@/components/TradeSkeleton";
 import { TradeModal } from "@/components/TradeModal";
 import { SignalConflictNotice, type SignalConflictReason } from "@/components/SignalConflictNotice";
+import { EvidenceLinks, type SignalEvidence } from "@/components/EvidenceLinks";
+import { FormField } from "@/components/ui/form-field";
+import { useI18n } from "@/lib/i18n";
+import { useLocaleFormatter } from "@/hooks/useLocaleFormatter";
 import { cn } from "@/lib/utils";
 import { MiniChart } from "./chart/MiniChart";
 import { PremiumSignalBadge } from "@/components/PremiumSignalBadge";
@@ -70,6 +74,10 @@ interface SignalCardProps {
   /** Set when no wallet is connected, so trade execution is unavailable. */
   walletMissing?: boolean;
   portfolioBalance?: number;
+  /** Source material or data references supporting this recommendation. */
+  evidence?: SignalEvidence[];
+  /** Called with the chosen return time when a custom snooze is set. */
+  onSnooze?: (until: Date) => void;
   onTrade?: (pair: string, price: number) => void;
   onPass?: () => void;
 }
@@ -109,10 +117,16 @@ export function SignalCard({
   expired = false,
   walletMissing = false,
   portfolioBalance,
+  evidence,
+  onSnooze,
   onTrade,
   onPass,
 }: SignalCardProps) {
   const [dismissed, setDismissed] = useState(false);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
+  const [snoozeValue, setSnoozeValue] = useState("");
+  const [snoozeError, setSnoozeError] = useState<string | null>(null);
+  const [snoozeUntil, setSnoozeUntil] = useState<Date | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copiedFeedback, setCopiedFeedback] = useState(false);
@@ -122,6 +136,8 @@ export function SignalCard({
   const shouldReduceMotion = useReducedMotion();
   const { isDemoMode } = useDemoModeStore();
   const fmt = usePriceFormat();
+  const { t } = useI18n();
+  const { formatDateTime } = useLocaleFormatter();
   const executingRef = useRef(false);
   const shareMenuRef = useRef<HTMLDivElement>(null);
   const hasVibratedRef = useRef(false);
@@ -337,6 +353,36 @@ export function SignalCard({
 
   function handleDragStart() {
     setIsDragging(true);
+  }
+
+  function handleSnoozeSubmit() {
+    if (!snoozeValue) {
+      setSnoozeError(t("signal.snooze.error.required"));
+      return;
+    }
+    const parsed = new Date(snoozeValue);
+    if (Number.isNaN(parsed.getTime())) {
+      setSnoozeError(t("signal.snooze.error.invalid"));
+      return;
+    }
+    if (parsed.getTime() <= Date.now()) {
+      setSnoozeError(t("signal.snooze.error.past"));
+      return;
+    }
+    setSnoozeError(null);
+    setSnoozeUntil(parsed);
+    setSnoozeOpen(false);
+    onSnooze?.(parsed);
+    setActionAnnouncement(
+      `Signal snoozed until ${formatDateTime(parsed)}`
+    );
+  }
+
+  function handleSnoozeClear() {
+    setSnoozeValue("");
+    setSnoozeError(null);
+    setSnoozeUntil(null);
+    setActionAnnouncement("Custom snooze cleared");
   }
 
   return (
@@ -590,10 +636,80 @@ export function SignalCard({
                       {analysis}
                       {changedFieldSrLabel("details")}
                     </p>
+                    {evidence && evidence.length > 0 && (
+                      <EvidenceLinks evidence={evidence} />
+                    )}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSnoozeOpen((value) => !value)}
+                  aria-expanded={snoozeOpen}
+                  aria-controls={`signal-snooze-${signalId}`}
+                  className="h-8 px-2 text-xs"
+                >
+                  {snoozeUntil
+                    ? `${t("signal.snooze.edit")} · ${formatDateTime(snoozeUntil)}`
+                    : t("signal.snooze.set")}
+                </Button>
+                {snoozeUntil && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSnoozeClear}
+                    className="h-8 px-2 text-xs"
+                    aria-label={t("signal.snooze.clear")}
+                  >
+                    {t("signal.snooze.clear")}
+                  </Button>
+                )}
+              </div>
+              {snoozeOpen && (
+                <div
+                  id={`signal-snooze-${signalId}`}
+                  className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-3 sm:flex-row sm:items-end"
+                >
+                  <div className="flex-1">
+                    <FormField
+                      label={t("signal.snooze.label")}
+                      htmlFor={`signal-snooze-input-${signalId}`}
+                      error={snoozeError ?? undefined}
+                    >
+                      <input
+                        id={`signal-snooze-input-${signalId}`}
+                        type="datetime-local"
+                        value={snoozeValue}
+                        onChange={(event) => {
+                          setSnoozeValue(event.target.value);
+                          if (snoozeError) setSnoozeError(null);
+                        }}
+                        aria-invalid={!!snoozeError}
+                        aria-describedby={
+                          snoozeError
+                            ? `signal-snooze-error-${signalId}`
+                            : undefined
+                        }
+                        className="w-full rounded-md border border-white/10 bg-background px-2 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                      />
+                    </FormField>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSnoozeSubmit}
+                    disabled={!snoozeValue || !!snoozeError}
+                    className="h-8"
+                  >
+                    {t("signal.snooze.confirm")}
+                  </Button>
+                </div>
+              )}
+            </div>
             {isPremium && !hasAccess && (
               <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-sm">
                 <p className="font-medium text-accent-warning">Premium signal locked</p>

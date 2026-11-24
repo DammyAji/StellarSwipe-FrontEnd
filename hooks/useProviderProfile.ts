@@ -2,7 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { SignalProvider, ProviderSignal } from "@/lib/types";
 import { queryOptions } from "@/lib/queryOptions";
 
-const mockProviderDetails: Record<string, SignalProvider> = {
+export type ProviderSignalScope = "active" | "archived" | "all";
+
+type ProviderSignalEntry = ProviderSignal & {
+  archived?: boolean;
+  evidence?: { label: string; url: string }[];
+};
+
+type ProviderProfileDetails = SignalProvider & {
+  coveredAssets?: string[];
+};
+
+const mockProviderDetails: Record<string, ProviderProfileDetails> = {
   "provider-1": {
     id: "provider-1",
     address: "GA7VIQKEA7HQNGYAUTALPC3D4GBTUFJGD2U7YKWXY7HXHPAWGP7XVFUA",
@@ -19,7 +30,7 @@ const mockProviderDetails: Record<string, SignalProvider> = {
   },
 };
 
-const mockProviderSignals: Record<string, ProviderSignal[]> = {
+const mockProviderSignals: Record<string, ProviderSignalEntry[]> = {
   "provider-1": [
     {
       id: "sig-1",
@@ -60,6 +71,28 @@ const mockProviderSignals: Record<string, ProviderSignal[]> = {
       outcome: "PENDING",
       targetPrice: 1.02,
     },
+    {
+      id: "sig-5",
+      asset: "XLM",
+      direction: "SELL",
+      confidence: 78,
+      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      outcome: "WIN",
+      targetPrice: 0.49,
+      actualPrice: 0.47,
+      archived: true,
+    },
+    {
+      id: "sig-6",
+      asset: "AQUA",
+      direction: "BUY",
+      confidence: 69,
+      timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      outcome: "LOSS",
+      targetPrice: 0.31,
+      actualPrice: 0.29,
+      archived: true,
+    },
   ],
 };
 
@@ -73,16 +106,40 @@ export function useProviderProfile(providerId: string) {
   });
 }
 
-export function useProviderSignals(providerId: string) {
+export function useProviderSignals(
+  providerId: string,
+  scope: ProviderSignalScope = "active"
+) {
   return useQuery({
-    queryKey: ["provider-signals", providerId],
+    queryKey: ["provider-signals", providerId, scope],
     queryFn: async () => {
       const rawSignals = mockProviderSignals[providerId] || [];
-      return rawSignals.map((signal) => ({
-        ...signal,
-        lastUpdated: signal.timestamp,
-        hasRevision: false,
-      }));
+      return rawSignals
+        .filter((signal) => {
+          const isArchived = signal.archived === true;
+          if (scope === "active") return !isArchived;
+          if (scope === "archived") return isArchived;
+          return true;
+        })
+        .map((signal) => ({
+          ...signal,
+          lastUpdated: signal.timestamp,
+          hasRevision: false,
+        }));
+    },
+    ...queryOptions.providerSignals,
+  });
+}
+
+export function useProviderCoveredAssets(providerId: string) {
+  return useQuery({
+    queryKey: ["provider-covered-assets", providerId],
+    queryFn: async () => {
+      const rawSignals = mockProviderSignals[providerId] || [];
+      const assets = rawSignals
+        .map((signal) => signal.asset)
+        .filter((asset): asset is string => Boolean(asset));
+      return Array.from(new Set(assets)).sort((a, b) => a.localeCompare(b));
     },
     ...queryOptions.providerSignals,
   });

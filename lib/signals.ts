@@ -4,6 +4,16 @@ import type { Quote, QuoteFreshness } from "./api-types.generated";
 export type SignalAction = "BUY" | "SELL" | "HOLD";
 export type SignalStatus = "Active" | "Waiting" | "Closed";
 
+/** A single piece of supporting material supplied for a signal. */
+export interface SignalEvidence {
+  /** Human-readable label describing the evidence. */
+  label: string;
+  /** External URL to the source material or data reference. */
+  url: string;
+  /** Optional classification of the evidence source. */
+  sourceType?: string;
+}
+
 export interface Signal {
   id: string;
   ticker: string;
@@ -19,6 +29,25 @@ export interface Signal {
   status?: SignalStatus;
   /** Price quote metadata; absent when the feed carries no price source. */
   quote?: Quote;
+  /** Supporting evidence; absent when the feed supplies none. */
+  evidence?: SignalEvidence[];
+  /** True when the signal has been archived by its provider. */
+  archived?: boolean;
+}
+
+/**
+ * Returns `url` only when it parses as an absolute http(s) URL; otherwise null.
+ * Callers must not render a link when this returns null.
+ */
+export function getSafeEvidenceUrl(url: string | null | undefined): string | null {
+  if (typeof url !== "string" || url.trim() === "") return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 export interface SignalFeedPage {
@@ -293,6 +322,8 @@ export interface ProviderActivitySummary {
   avgConfidence: number;
   /** ISO timestamp of the provider's most recent signal, null when none. */
   lastSignalAt: string | null;
+  /** Deduplicated Stellar assets the provider has covered; absent when unknown. */
+  coveredAssets?: string[];
 }
 
 export interface ActivitySummaryPage {

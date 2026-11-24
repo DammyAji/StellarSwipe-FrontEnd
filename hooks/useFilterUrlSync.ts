@@ -5,6 +5,7 @@ import {
   useSignalFilterStore,
   type FeedSortOrder,
   type FilterDirection,
+  type SignalScope,
 } from "@/store/useSignalFilterStore";
 
 /** URL parameter names owned by the signal feed filters. */
@@ -15,6 +16,7 @@ export const FILTER_PARAMS = {
   bookmarkedOnly: "saved",
   followedOnly: "followed",
   sortOrder: "sort",
+  scope: "scope",
 } as const;
 
 const DIRECTIONS: FilterDirection[] = ["ALL", "BUY", "SELL"];
@@ -24,6 +26,7 @@ const SORT_ORDERS: FeedSortOrder[] = [
   "relevant",
   "confidence",
 ];
+const SCOPES: SignalScope[] = ["active", "archived", "all"];
 
 type FilterValues = {
   direction: FilterDirection;
@@ -32,6 +35,7 @@ type FilterValues = {
   bookmarkedOnly: boolean;
   followedOnly: boolean;
   sortOrder: FeedSortOrder;
+  scope: SignalScope;
 };
 
 const DEFAULTS: FilterValues = {
@@ -41,6 +45,7 @@ const DEFAULTS: FilterValues = {
   bookmarkedOnly: false,
   followedOnly: false,
   sortOrder: "latest",
+  scope: "active",
 };
 
 /** Maximum length kept for free-text parameters (asset / provider search). */
@@ -55,6 +60,7 @@ export function parseFilterParams(search: string): FilterValues {
   const params = new URLSearchParams(search);
   const dir = params.get(FILTER_PARAMS.direction)?.toUpperCase();
   const sort = params.get(FILTER_PARAMS.sortOrder)?.toLowerCase();
+  const scope = params.get(FILTER_PARAMS.scope)?.toLowerCase();
   return {
     direction: DIRECTIONS.includes(dir as FilterDirection)
       ? (dir as FilterDirection)
@@ -66,6 +72,9 @@ export function parseFilterParams(search: string): FilterValues {
     sortOrder: SORT_ORDERS.includes(sort as FeedSortOrder)
       ? (sort as FeedSortOrder)
       : DEFAULTS.sortOrder,
+    scope: SCOPES.includes(scope as SignalScope)
+      ? (scope as SignalScope)
+      : DEFAULTS.scope,
   };
 }
 
@@ -82,6 +91,10 @@ export function stripInvalidFilterParams(search: string): string {
   const sort = params.get(FILTER_PARAMS.sortOrder);
   if (sort !== null && !SORT_ORDERS.includes(sort.toLowerCase() as FeedSortOrder)) {
     params.delete(FILTER_PARAMS.sortOrder);
+  }
+  const scope = params.get(FILTER_PARAMS.scope);
+  if (scope !== null && !SCOPES.includes(scope.toLowerCase() as SignalScope)) {
+    params.delete(FILTER_PARAMS.scope);
   }
   (["bookmarkedOnly", "followedOnly"] as const).forEach((key) => {
     const value = params.get(FILTER_PARAMS[key]);
@@ -123,9 +136,24 @@ export function serializeFilterParams(
 }
 
 function pickFilters(state: FilterValues): FilterValues {
-  const { direction, asset, provider, bookmarkedOnly, followedOnly, sortOrder } =
-    state;
-  return { direction, asset, provider, bookmarkedOnly, followedOnly, sortOrder };
+  const {
+    direction,
+    asset,
+    provider,
+    bookmarkedOnly,
+    followedOnly,
+    sortOrder,
+    scope,
+  } = state;
+  return {
+    direction,
+    asset,
+    provider,
+    bookmarkedOnly,
+    followedOnly,
+    sortOrder,
+    scope,
+  };
 }
 
 /**
@@ -190,7 +218,8 @@ export function useFilterUrlSync() {
         state.asset === prev.asset &&
         state.bookmarkedOnly === prev.bookmarkedOnly &&
         state.followedOnly === prev.followedOnly &&
-        state.sortOrder === prev.sortOrder;
+        state.sortOrder === prev.sortOrder &&
+        state.scope === prev.scope;
       if (textOnly) {
         window.history.replaceState(window.history.state, "", url);
       } else {

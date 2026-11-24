@@ -252,3 +252,46 @@ export function getCurrentLocale(): Locale {
 export function getSupportedLocales(): Locale[] {
   return SUPPORTED_LOCALES;
 }
+
+/**
+ * Translation keys for the evidence, provider signal scope, covered-assets,
+ * and custom snooze-time UI. Kept here as a typed reference so components and
+ * tests share one source of truth; the actual English copy lives in
+ * public/locales/en.json and is resolved through `t()` (which falls back to
+ * English for every other locale).
+ */
+export const NEW_UI_TRANSLATION_KEYS = {
+  evidence: {
+    heading: "evidence.heading",
+    empty: "evidence.empty",
+    error: "evidence.error",
+    loading: "evidence.loading",
+    linkLabel: "evidence.link_label",
+  },
+  providerSignalScope: {
+    label: "provider.signals.scope.label",
+    active: "provider.signals.scope.active",
+    archived: "provider.signals.scope.archived",
+    all: "provider.signals.scope.all",
+    emptyActive: "provider.signals.scope.empty_active",
+    emptyArchived: "provider.signals.scope.empty_archived",
+    emptyAll: "provider.signals.scope.empty_all",
+    error: "provider.signals.scope.error",
+    loading: "provider.signals.scope.loading",
+  },
+  coveredAssets: {
+    heading: "provider.assets.heading",
+    empty: "provider.assets.empty",
+    error: "provider.assets.error",
+    loading: "provider.assets.loading",
+  },
+  snoozeCustomTime: {
+    label: "snooze.custom_time.label",
+    set: "snooze.custom_time.set",
+    edit: "snooze.custom_time.edit",
+    clear: "snooze.custom_time.clear",
+    invalidFormat: "snooze.custom_time.invalid_format",
+    mustBeFuture: "snooze.custom_time.must_be_future",
+    error: "snooze.custom_time.error",
+  },
+} as const;

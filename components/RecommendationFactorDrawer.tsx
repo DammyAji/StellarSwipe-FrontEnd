@@ -12,6 +12,7 @@ import {
   RECOMMENDATION_FACTORS,
   type RecommendationFactor,
 } from "@/services/recommendationEngine";
+import { EvidenceLinks } from "@/components/EvidenceLinks";
 
 type DetailState =
   | { status: "loading" }
@@ -126,6 +127,20 @@ export function RecommendationFactorDrawer({
                     {state.factor.description}
                   </dd>
                 </DialogDescription>
+              </div>
+              <div>
+                <dt className="text-xs font-medium text-muted-foreground">
+                  Supporting evidence
+                </dt>
+                <dd className="mt-1">
+                  {state.factor.evidence && state.factor.evidence.length > 0 ? (
+                    <EvidenceLinks evidence={state.factor.evidence} />
+                  ) : (
+                    <p className="text-muted-foreground">
+                      No supporting evidence available.
+                    </p>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Source</dt>

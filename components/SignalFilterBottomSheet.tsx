@@ -5,6 +5,7 @@ import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   FilterDirection,
+  FilterScope,
   useSignalFilterStore,
 } from "@/store/useSignalFilterStore";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
@@ -17,6 +18,12 @@ const DIRECTIONS: { label: string; value: FilterDirection }[] = [
 
 const TIMEFRAMES = ["1h", "4h", "1d", "1w"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
+
+const SCOPES: { label: string; value: FilterScope }[] = [
+  { label: "Active", value: "ACTIVE" },
+  { label: "Archived", value: "ARCHIVED" },
+  { label: "All", value: "ALL" },
+];
 
 interface SignalFilterBottomSheetProps {
   open: boolean;
@@ -42,6 +49,7 @@ export function SignalFilterBottomSheet({
   // re-filter while the user is still choosing. Apply commits the draft;
   // Cancel / Escape / backdrop / swipe-down discard it.
   const [direction, setDirection] = useState<FilterDirection>(store.direction);
+  const [scope, setScope] = useState<FilterScope>(store.scope);
   const [asset, setAsset] = useState(store.asset);
   const [provider, setProvider] = useState(store.provider);
   const [bookmarkedOnly, setBookmarkedOnly] = useState(store.bookmarkedOnly);
@@ -52,6 +60,7 @@ export function SignalFilterBottomSheet({
     if (!open) return;
     const current = useSignalFilterStore.getState();
     setDirection(current.direction);
+    setScope(current.scope);
     setAsset(current.asset);
     setProvider(current.provider);
     setBookmarkedOnly(current.bookmarkedOnly);
@@ -61,6 +70,7 @@ export function SignalFilterBottomSheet({
 
   const isActive =
     direction !== "ALL" ||
+    scope !== "ACTIVE" ||
     asset !== "" ||
     provider !== "" ||
     bookmarkedOnly ||
@@ -69,6 +79,7 @@ export function SignalFilterBottomSheet({
   const handleReset = () => {
     // Reset only clears the draft — nothing changes until Apply.
     setDirection("ALL");
+    setScope("ACTIVE");
     setAsset("");
     setProvider("");
     setBookmarkedOnly(false);
@@ -77,6 +88,7 @@ export function SignalFilterBottomSheet({
 
   const handleApply = () => {
     store.setDirection(direction);
+    store.setScope(scope);
     store.setAsset(asset);
     store.setProvider(provider);
     store.setBookmarkedOnly(bookmarkedOnly);
@@ -157,6 +169,35 @@ export function SignalFilterBottomSheet({
       }
     >
       <div className="px-4 pb-4 space-y-5">
+        {/* Scope row */}
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Signals
+                </p>
+                <div
+                  role="group"
+                  aria-label="Filter by signal status"
+                  className="flex gap-2"
+                >
+                  {SCOPES.map(({ label, value }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setScope(value)}
+                      aria-pressed={scope === value}
+                      className={cn(
+                        "flex-1 rounded-xl py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500",
+                        scope === value
+                          ? "bg-sky-500/20 text-sky-400 border border-sky-500/40"
+                          : "bg-white/5 text-slate-400 border border-white/10 hover:border-white/20"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
         {/* Direction row */}
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -287,6 +328,10 @@ export function SignalFilterBottomSheet({
                 <p className="text-xs text-slate-500" aria-live="polite">
                   Pending:{" "}
                   {[
+                    scope !== "ACTIVE" &&
+                      `Signals: ${
+                        scope === "ARCHIVED" ? "Archived" : "Active + Archived"
+                      }`,
                     direction !== "ALL" && `Direction: ${direction}`,
                     asset && `Market: ${asset}`,
                     provider && `Provider: ${provider}`,

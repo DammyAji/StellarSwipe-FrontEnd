@@ -6,23 +6,53 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 
-type EmptyStateVariant = "no-signals" | "no-results" | "no-followed";
+type EmptyStateVariant = "no-signals" | "no-results" | "no-followed" | "no-scope-results";
+
+type SignalScope = "active" | "archived" | "all";
 
 interface SignalEmptyStateProps {
   /** Controls which copy and icon are shown.
-   *  - "no-signals"  — initial load / no signals published yet (default)
-   *  - "no-results"  — active filters returned zero matches
-   *  - "no-followed" — followed-providers filter is on but nothing is followed
+   *  - "no-signals"        — initial load / no signals published yet (default)
+   *  - "no-results"        — active filters returned zero matches
+   *  - "no-followed"       — followed-providers filter is on but nothing is followed
+   *  - "no-scope-results"  — the selected active/archived/all scope has no signals
    */
   variant?: EmptyStateVariant;
+  /**
+   * The active/archived/all scope the user is viewing. Used by the
+   * "no-scope-results" variant to name the scope explicitly in the copy.
+   */
+  scope?: SignalScope;
   onRefresh: () => void;
   /**
    * Called when the user clicks "Clear filters" in the no-results variant,
-   * or "Show all signals" in the no-followed variant.
+   * "Show all signals" in the no-followed variant, or "Show all signals" in
+   * the no-scope-results variant.
    * If omitted the button still appears but only calls `onRefresh`.
    */
   onClearFilters?: () => void;
 }
+
+const SCOPE_COPY: Record<
+  SignalScope,
+  { heading: string; body: string; ariaLabel: string }
+> = {
+  active: {
+    heading: "No active signals for this provider",
+    body: "This provider has no active signals right now. Switch to archived or all signals to see more.",
+    ariaLabel: "No active signals for this provider",
+  },
+  archived: {
+    heading: "No archived signals for this provider",
+    body: "This provider has no archived signals. Switch to active or all signals to see more.",
+    ariaLabel: "No archived signals for this provider",
+  },
+  all: {
+    heading: "No signals for this provider",
+    body: "This provider hasn't published any signals yet. Try refreshing or check back later.",
+    ariaLabel: "No signals for this provider",
+  },
+};
 
 const VARIANTS: Record<
   EmptyStateVariant,
@@ -55,10 +85,14 @@ const VARIANTS: Record<
 
 export function SignalEmptyState({
   variant = "no-signals",
+  scope = "all",
   onRefresh,
   onClearFilters,
 }: SignalEmptyStateProps) {
-  const { Icon, heading, body, ariaLabel } = VARIANTS[variant];
+  const { Icon, heading, body, ariaLabel } =
+    variant === "no-scope-results"
+      ? { Icon: SearchX, ...SCOPE_COPY[scope] }
+      : VARIANTS[variant];
 
   const handleClearFilters = () => {
     onClearFilters?.();
@@ -88,6 +122,17 @@ export function SignalEmptyState({
             >
               <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
               Clear filters
+            </Button>
+          ) : variant === "no-scope-results" ? (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => onClearFilters?.()}
+              className="gap-2 bg-sky-500 hover:bg-sky-400 text-white"
+              aria-label="Show signals from all scopes"
+            >
+              <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />
+              Show all signals
             </Button>
           ) : variant === "no-followed" ? (
             <Button
@@ -140,7 +185,7 @@ export function SignalEmptyState({
               </Button>
             </>
           ) : (
-            /* no-results secondary action: soft refresh without clearing filters */
+            /* no-results / no-scope-results secondary action: soft refresh without clearing filters */
             <Button
               size="sm"
               variant="outline"
