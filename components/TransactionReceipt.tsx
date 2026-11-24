@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 export type StellarNetwork = 'mainnet' | 'testnet';
 
@@ -78,6 +78,105 @@ function Field({ label, value }: { label: string; value: string | null }) {
   );
 }
 
+const CONFIRMED_STATUSES = new Set(['confirmed', 'success', 'succeeded', 'complete', 'completed']);
+
+function isConfirmedStatus(status: string | null): boolean {
+  if (!status) return false;
+  return CONFIRMED_STATUSES.has(status.trim().toLowerCase());
+}
+
+type CopyState = 'idle' | 'success' | 'error' | 'unavailable';
+
+function HashField({ hash, confirmed }: { hash: string | null; confirmed: boolean }) {
+  const [copyState, setCopyState] = useState<CopyState>('idle');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    };
+  }, []);
+
+  const scheduleReset = useCallback(() => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    resetTimer.current = setTimeout(() => setCopyState('idle'), 4000);
+  }, []);
+
+  const selectHash = useCallback(() => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.focus();
+    node.select();
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    if (!hash || !confirmed) return;
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        setCopyState('unavailable');
+        selectHash();
+        scheduleReset();
+        return;
+      }
+      await navigator.clipboard.writeText(hash);
+      setCopyState('success');
+      scheduleReset();
+    } catch {
+      setCopyState('error');
+      selectHash();
+      scheduleReset();
+    }
+  }, [hash, confirmed, scheduleReset, selectHash]);
+
+  const canCopy = Boolean(hash) && confirmed;
+
+  let feedback: string | null = null;
+  if (copyState === 'success') feedback = 'Transaction hash copied to clipboard.';
+  else if (copyState === 'error')
+    feedback = 'Could not copy automatically. The hash is selected — press Ctrl+C or Cmd+C to copy.';
+  else if (copyState === 'unavailable')
+    feedback = 'Clipboard unavailable. The hash is selected — press Ctrl+C or Cmd+C to copy.';
+
+  return (
+    <div className="receipt-field">
+      <dt className="receipt-field__label">Transaction hash</dt>
+      <dd className="receipt-field__value">
+        {hash === null ? (
+          <span className="receipt-field__unavailable">Unavailable</span>
+        ) : (
+          <span className="receipt-field__hash">
+            <input
+              ref={inputRef}
+              className="receipt-field__hash-input"
+              type="text"
+              readOnly
+              value={hash}
+              aria-label="Transaction hash"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            {canCopy ? (
+              <button
+                type="button"
+                className="receipt-field__copy"
+                onClick={handleCopy}
+                aria-label="Copy transaction hash"
+              >
+                Copy
+              </button>
+            ) : (
+              <span className="receipt-field__copy-unavailable">Copy unavailable until confirmed</span>
+            )}
+          </span>
+        )}
+      </dd>
+      <span className="receipt-field__feedback" role="status" aria-live="polite">
+        {feedback}
+      </span>
+    </div>
+  );
+}
+
 export default function TransactionReceipt({ transaction, network }: TransactionReceiptProps) {
   const resolvedNetwork = resolveNetwork(network, transaction.network);
   const hash = transaction.hash && transaction.hash.trim() ? transaction.hash.trim() : null;
@@ -95,7 +194,7 @@ export default function TransactionReceipt({ transaction, network }: Transaction
     <section className="transaction-receipt" aria-label="Transaction receipt">
       <h2 className="transaction-receipt__title">Transaction receipt</h2>
       <dl className="transaction-receipt__fields">
-        <Field label="Transaction hash" value={hash} />
+        <HashField hash={hash} confirmed={confirmed} />
         <Field label="Asset" value={asset} />
         <Field label="Amount" value={amount} />
         <Field label="Time" value={time} />

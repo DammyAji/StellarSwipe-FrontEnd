@@ -77,6 +77,31 @@ export interface ReceiptField {
   available: boolean;
 }
 
+/** Statuses that represent a settled, confirmed transaction. */
+const CONFIRMED_STATUSES: ReadonlySet<TransactionStatus> = new Set([
+  "success",
+  "confirmed",
+]);
+
+/**
+ * Return the transaction hash only when the transaction has reached a
+ * confirmed/success state. Returns null for unconfirmed, failed, or missing
+ * hashes so callers never offer an unconfirmed hash as copyable.
+ */
+export function getConfirmedTransactionHash(
+  tx: Transaction | null | undefined,
+): string | null {
+  if (!tx) {
+    return null;
+  }
+  const status = tx.status ?? null;
+  if (!status || !CONFIRMED_STATUSES.has(status)) {
+    return null;
+  }
+  const hash = typeof tx.hash === "string" ? tx.hash.trim() : "";
+  return hash ? hash : null;
+}
+
 function formatAmount(amount?: string | number | null): string | null {
   if (amount === null || amount === undefined) {
     return null;
