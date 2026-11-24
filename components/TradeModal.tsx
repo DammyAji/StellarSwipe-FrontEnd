@@ -31,6 +31,9 @@ import {
   isTradeWalletEligible,
   resolvePreferredTradeWallet,
 } from "@/lib/tradeWalletSelection";
+import { useQuoteStatus } from "@/hooks/useQuoteStatus";
+import { useTradeEntryModeStore } from "@/store/useTradeEntryModeStore";
+import { roundStellarAmount } from "@/lib/stellarAmount";
 
 function truncateKey(key: string) {
   return `${key.slice(0, 6)}...${key.slice(-4)}`;
@@ -51,6 +54,8 @@ export interface PositionDetails {
 export interface TradeQuote {
   price: number;
   expiresAt?: number;
+  /** Total quote fees in display currency, when the quote provides them. */
+  fees?: number;
 }
 
 interface TradeModalProps {
@@ -187,6 +192,11 @@ export function TradeModal({
   const [switchTarget, setSwitchTarget] = useState<string | null>(null);
   const [selectedTradeWallet, setSelectedTradeWallet] = useState("");
   const [tradeWalletInitialized, setTradeWalletInitialized] = useState(false);
+  // Entry mode: asset units (XLM) or display currency (USDC). New forms start
+  // in the user's saved default; switching preserves the value where possible.
+  const defaultEntryMode = useTradeEntryModeStore((s) => s.defaultMode);
+  const [entryMode, setEntryMode] = useState<"asset" | "currency">("asset");
+  const [currencyAmount, setCurrencyAmount] = useState("");
   const { isDemoMode } = useDemoModeStore();
   const walletNetworkDraft = useWalletStore((s) => s.network);
   const wallets = useWalletStore((s) => s.wallets);
@@ -258,9 +268,16 @@ export function TradeModal({
       ? Math.max(0, Math.ceil((quoteExpiresAt - now) / 1000))
       : null;
   const quoteExpired = quoteSecondsLeft === 0;
+  const quoteStatus = useQuoteStatus(activeQuote);
 
   const price = type === "MARKET" ? marketPrice : parseFloat(limitPrice) || 0;
-  const total = price * (parseFloat(amount) || 0);
+
+  // Exact Stellar amount actually submitted. Asset precision rules may round
+  // the user's input; the review discloses any difference.
+  const enteredAmount = parseFloat(amount) || 0;
+  const submittedAmount = roundStellarAmount(enteredAmount);
+  const amountRounded = submittedAmount !== enteredAmount;
+  const total = price * submittedAmount;
   const insufficient = total > walletBalance;
   const exceedsPositionLimit =
     positionLimitEnabled &&
@@ -325,8 +342,10 @@ export function TradeModal({
       setConfirmError(null);
       setRefreshedQuote(null);
       setQuoteError(null);
+      setEntryMode(defaultEntryMode);
+      setCurrencyAmount("");
     }
-  }, [open]);
+  }, [open, defaultEntryMode]);
 
   // Restore the unfinished draft for this asset/network/wallet. A draft from
   // another context is never applied, so the fields fall back to defaults.
@@ -472,9 +491,32 @@ export function TradeModal({
       if (!price) return;
       const xlm = (walletBalance * pct) / 100 / price;
       setAmount(xlm.toFixed(2));
+      setCurrencyAmount((xlm * price).toFixed(2));
       setTouched((t) => ({ ...t, amount: true }));
     },
     [price, walletBalance]
+  );
+
+  // Switch entry mode. Preserve the value using the active quote/price; when no
+  // price is available, request a fresh quote rather than guessing a value.
+  const handleEntryModeChange = useCallback(
+    async (nextMode: "asset" | "currency") => {
+      if (nextMode === entryMode) return;
+      if (!price) {
+        setQuoteError(
+          "A current price is needed to switch entry mode. Refresh the quote to continue."
+        );
+        if (onRefreshQuote) await handleRefreshQuote();
+        return;
+      }
+      if (nextMode === "currency") {
+        setCurrencyAmount((enteredAmount * price).toFixed(2));
+      } else {
+        setAmount((parseFloat(currencyAmount) / price || 0).toFixed(2));
+      }
+      setEntryMode(nextMode);
+    },
+    [entryMode, price, enteredAmount, currencyAmount, onRefreshQuote, handleRefreshQuote]
   );
 
   // Refresh the quote; on failure the draft (inputs and step) is left untouched
@@ -526,7 +568,7 @@ export function TradeModal({
           publicKey: tradeWalletPublicKey,
           network: walletNetwork,
           orderType: type,
-          amount,
+          amount: String(submittedAmount),
           price,
           slippagePercent: estimatedSlippage,
         }),
@@ -561,7 +603,7 @@ export function TradeModal({
     clearTradeDraft(draftKey);
     onConfirm
       ? onConfirm({
-          amount,
+          amount: String(submittedAmount),
           price,
           orderType: type,
           walletPublicKey: tradeWalletPublicKey,
@@ -571,6 +613,7 @@ export function TradeModal({
     type,
     price,
     amount,
+    submittedAmount,
     stopLoss,
     positionLimit,
     onClose,
@@ -623,6 +666,22 @@ export function TradeModal({
   const feeEstimateAvailable = total > 0;
   const formatEstimate = (value: number) =>
     feeEstimateAvailable ? `$${value.toFixed(4)}` : "—";
+
+  // Spendable-balance preview (#1099). Only shown when the same wallet and a
+  // usable quote back the numbers; otherwise an unavailable state is rendered.
+  const quoteFees = activeQuote?.fees;
+  const previewAvailable =
+    walletReady &&
+    !!walletKey &&
+    quoteStatus === "valid" &&
+    total > 0 &&
+    Number.isFinite(walletBalance);
+  const previewStale = quoteStatus === "stale" || quoteStatus === "expired";
+  const spendableBefore = walletBalance;
+  const spendableAfter = previewAvailable
+    ? Math.max(0, walletBalance - total - (quoteFees ?? 0))
+    : null;
+  const formatSpendable = (value: number) => `$${value.toFixed(4)}`;
 
   return (
     <>
@@ -896,28 +955,82 @@ export function TradeModal({
 
                   {/* Amount */}
                   <div>
+                    <div
+                      role="group"
+                      aria-label="Amount entry mode"
+                      className="mb-1.5 flex rounded-lg bg-foreground/5 p-1"
+                    >
+                      {(["asset", "currency"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => handleEntryModeChange(mode)}
+                          aria-pressed={entryMode === mode}
+                          className={`flex-1 rounded-md py-1 text-xs font-medium transition-all
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface
+                            ${
+                              entryMode === mode
+                                ? "bg-foreground/15 text-foreground shadow"
+                                : "text-foreground-muted hover:text-foreground"
+                            }`}
+                        >
+                          {mode === "asset" ? "XLM" : "USDC"}
+                        </button>
+                      ))}
+                    </div>
                     <label
                       htmlFor="trade-amount"
                       className="text-xs text-foreground-muted mb-1 block"
                     >
-                      Amount (XLM)
+                      {entryMode === "asset" ? "Amount (XLM)" : "Amount (USDC)"}
                     </label>
-                    <input
-                      id="trade-amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      onBlur={() => setTouched((t) => ({ ...t, amount: true }))}
-                      aria-describedby={
-                        amountError ? "trade-amount-error" : undefined
-                      }
-                      aria-invalid={!!amountError}
-                      className="w-full rounded-lg bg-input border border-border px-3 py-2 text-foreground placeholder-foreground-subtle text-sm
-                        focus:outline-none focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                    />
+                    {entryMode === "asset" ? (
+                      <input
+                        id="trade-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        onBlur={() =>
+                          setTouched((t) => ({ ...t, amount: true }))
+                        }
+                        aria-describedby={
+                          amountError ? "trade-amount-error" : undefined
+                        }
+                        aria-invalid={!!amountError}
+                        className="w-full rounded-lg bg-input border border-border px-3 py-2 text-foreground placeholder-foreground-subtle text-sm
+                          focus:outline-none focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                      />
+                    ) : (
+                      <input
+                        id="trade-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={currencyAmount}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setCurrencyAmount(next);
+                          setAmount(
+                            price
+                              ? ((parseFloat(next) || 0) / price).toFixed(2)
+                              : ""
+                          );
+                        }}
+                        onBlur={() =>
+                          setTouched((t) => ({ ...t, amount: true }))
+                        }
+                        aria-describedby={
+                          amountError ? "trade-amount-error" : undefined
+                        }
+                        aria-invalid={!!amountError}
+                        className="w-full rounded-lg bg-input border border-border px-3 py-2 text-foreground placeholder-foreground-subtle text-sm
+                          focus:outline-none focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+                      />
+                    )}
                     {amountError && (
                       <p
                         id="trade-amount-error"
@@ -991,6 +1104,62 @@ export function TradeModal({
                         </span>
                       )}
                     </div>
+                  </div>
+
+                  {/* Spendable balance preview (#1099) */}
+                  <div
+                    role="region"
+                    aria-label="Spendable balance preview"
+                    aria-busy={quoteStatus === "loading"}
+                    className="rounded-lg border border-border bg-input px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-foreground-subtle">
+                        Spendable before
+                      </span>
+                      <span className="font-mono font-medium text-foreground">
+                        {walletReady && Number.isFinite(walletBalance)
+                          ? formatSpendable(spendableBefore)
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-foreground-subtle">
+                        Spendable after
+                      </span>
+                      <span className="font-mono font-medium text-foreground">
+                        {spendableAfter !== null
+                          ? formatSpendable(spendableAfter)
+                          : "—"}
+                      </span>
+                    </div>
+                    {quoteFees !== undefined && previewAvailable && (
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-foreground-subtle">
+                          Quote fees
+                        </span>
+                        <span className="font-mono font-medium text-foreground">
+                          {formatSpendable(quoteFees)}
+                        </span>
+                      </div>
+                    )}
+                    {!previewAvailable && (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="mt-1 text-xs text-foreground-muted"
+                      >
+                        {quoteStatus === "loading"
+                          ? "Loading balance preview…"
+                          : "Balance preview unavailable until a wallet and current quote are available."}
+                      </p>
+                    )}
+                    {previewStale && (
+                      <p role="alert" className="mt-1 text-xs text-accent-warning">
+                        This preview is based on a stale quote. Refresh the quote
+                        to update it.
+                      </p>
+                    )}
                   </div>
 
                   {/* Estimated fees and net amount, recalculated as amount or quote changes */}
@@ -1331,9 +1500,18 @@ export function TradeModal({
                     <div className="flex items-center justify-between px-3 py-2">
                       <span className="text-foreground-muted">Amount</span>
                       <span className="font-mono font-medium text-foreground">
-                        {amount} XLM
+                        {submittedAmount} XLM
                       </span>
                     </div>
+                    {amountRounded && (
+                      <div className="px-3 py-2">
+                        <p className="text-xs text-foreground-muted">
+                          You entered {amount} XLM. Stellar precision rounds the
+                          submitted amount to {submittedAmount} XLM, which is the
+                          value sent for execution.
+                        </p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between px-3 py-2">
                       <span className="text-foreground-muted">Price</span>
                       <span className="font-mono font-medium text-foreground">
@@ -1423,9 +1601,13 @@ export function TradeModal({
                   </button>
                 </div>
                 <span id="confirm-button-help" className="sr-only">
-                  {`Place ${type.toLowerCase()} order for ${amount} XLM at ${
+                  {`Place ${type.toLowerCase()} order for ${submittedAmount} XLM at ${
                     type === "MARKET" ? "market price" : `${limitPrice} USDC`
-                  }. Press Enter to confirm.`}
+                  }.${
+                    amountRounded
+                      ? ` The entered amount of ${amount} XLM is rounded to ${submittedAmount} XLM.`
+                      : ""
+                  } Press Enter to confirm.`}
                 </span>
 
                 <p

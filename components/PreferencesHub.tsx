@@ -17,6 +17,7 @@ import { NetworkSwitcher } from "@/components/NetworkSwitcher";
 import { SettingsHistory } from "@/components/SettingsHistory";
 import { useCurrencyStore } from "@/store/useCurrencyStore";
 import { useFeedDensityStore } from "@/store/useFeedDensityStore";
+import { useTradeEntryModeStore } from "@/store/useTradeEntryModeStore";
 import { useThemeStore } from "@/store/useThemeStore";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import { useGuidedTourStore } from "@/store/useGuidedTourStore";
@@ -186,6 +187,11 @@ export function PreferencesHub() {
           </div>
           <CurrencySelector />
         </div>
+        <div className="border-t border-border pt-4">
+          <SettingAnchor id="setting-trade-entry-mode">
+            <TradeEntryModeRow />
+          </SettingAnchor>
+        </div>
       </PreferencesSection>
 
       <PreferencesSection
@@ -251,6 +257,56 @@ export function PreferencesHub() {
       >
         <SettingsHistory />
       </PreferencesSection>
+    </div>
+  );
+}
+
+function TradeEntryModeRow() {
+  const mode = useTradeEntryModeStore((s) => s.mode);
+  const setMode = useTradeEntryModeStore((s) => s.setMode);
+  const labelId = useId();
+
+  const options = [
+    { value: "asset" as const, label: "Asset units" },
+    { value: "currency" as const, label: "Display currency" },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p id={labelId} className="text-xs font-medium text-foreground">
+          Default trade amount entry
+        </p>
+        <p className="text-xs text-foreground-muted">
+          New trade forms start in this mode. You can still switch modes on any
+          form; switching keeps the current value or requests a fresh quote.
+        </p>
+      </div>
+      <div
+        role="radiogroup"
+        aria-labelledby={labelId}
+        className="inline-flex shrink-0 rounded-lg border border-border p-0.5"
+      >
+        {options.map((option) => {
+          const selected = mode === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setMode(option.value)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                selected
+                  ? "bg-foreground/10 text-foreground"
+                  : "text-foreground-muted hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

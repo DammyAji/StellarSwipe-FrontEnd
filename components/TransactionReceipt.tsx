@@ -9,6 +9,14 @@ export interface TransactionReceiptData {
   time?: string | Date | null;
   status?: string | null;
   network?: StellarNetwork | null;
+  /** Confirmed amount actually received/sent, distinct from any estimate. */
+  actualAmount?: string | number | null;
+  /** Confirmed fee actually paid, distinct from any estimate. */
+  actualFee?: string | number | null;
+  /** Estimated amount, shown separately from the confirmed actual amount. */
+  estimatedAmount?: string | number | null;
+  /** Estimated fee, shown separately from the confirmed actual fee. */
+  estimatedFee?: string | number | null;
 }
 
 export interface TransactionReceiptProps {
@@ -54,6 +62,11 @@ function formatAmount(amount: string | number | null | undefined): string | null
   return str ? str : null;
 }
 
+function formatFee(fee: string | number | null | undefined): string | null {
+  const formatted = formatAmount(fee);
+  return formatted === null ? null : formatted;
+}
+
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="receipt-field">
@@ -73,6 +86,10 @@ export default function TransactionReceipt({ transaction, network }: Transaction
   const amount = formatAmount(transaction.amount);
   const time = formatTime(transaction.time);
   const status = transaction.status && transaction.status.trim() ? transaction.status.trim() : null;
+  const actualAmount = formatAmount(transaction.actualAmount);
+  const actualFee = formatFee(transaction.actualFee);
+  const estimatedAmount = formatAmount(transaction.estimatedAmount);
+  const estimatedFee = formatFee(transaction.estimatedFee);
 
   return (
     <section className="transaction-receipt" aria-label="Transaction receipt">
@@ -84,6 +101,20 @@ export default function TransactionReceipt({ transaction, network }: Transaction
         <Field label="Time" value={time} />
         <Field label="Status" value={status} />
       </dl>
+      <h3 className="transaction-receipt__subtitle">Confirmed actuals</h3>
+      <dl className="transaction-receipt__fields transaction-receipt__fields--actual">
+        <Field label="Actual amount" value={actualAmount} />
+        <Field label="Actual fee" value={actualFee} />
+      </dl>
+      {estimatedAmount !== null || estimatedFee !== null ? (
+        <>
+          <h3 className="transaction-receipt__subtitle">Estimates</h3>
+          <dl className="transaction-receipt__fields transaction-receipt__fields--estimated">
+            <Field label="Estimated amount" value={estimatedAmount} />
+            <Field label="Estimated fee" value={estimatedFee} />
+          </dl>
+        </>
+      ) : null}
       {explorerUrl ? (
         <a
           className="transaction-receipt__explorer-link"

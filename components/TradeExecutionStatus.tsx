@@ -9,6 +9,14 @@ interface TradeExecutionStatusProps {
   liveSlippage: number;
   error: string | null;
   onRetry?: () => void;
+  /** Confirmed actual amount received from the trade result; null when unavailable. */
+  actualAmount?: number | null;
+  /** Confirmed actual fee charged by the trade result; null when unavailable. */
+  actualFee?: number | null;
+  /** Symbol/unit for the actual amount (e.g. token ticker). */
+  actualAmountSymbol?: string | null;
+  /** Symbol/unit for the actual fee. */
+  actualFeeSymbol?: string | null;
 }
 
 /**
@@ -25,6 +33,10 @@ export function TradeExecutionStatus({
   liveSlippage,
   error,
   onRetry,
+  actualAmount = null,
+  actualFee = null,
+  actualAmountSymbol = null,
+  actualFeeSymbol = null,
 }: TradeExecutionStatusProps) {
   const elapsedRef = useRef<HTMLSpanElement>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -83,10 +95,32 @@ export function TradeExecutionStatus({
       )}
 
       {!isExecuting && executionTimeMs !== null && !error && (
-        <div className="flex items-center justify-between text-green-500">
-          <span>Trade confirmed</span>
-          <span className="font-mono text-xs">{executionTimeMs}ms</span>
-        </div>
+        <>
+          <div className="flex items-center justify-between text-green-500">
+            <span>Trade confirmed</span>
+            <span className="font-mono text-xs">{executionTimeMs}ms</span>
+          </div>
+          <dl className="text-xs text-muted-foreground space-y-0.5">
+            <div className="flex items-center justify-between">
+              <dt>Actual amount received</dt>
+              <dd className="font-mono">
+                {actualAmount !== null
+                  ? `${actualAmount}${
+                      actualAmountSymbol ? ` ${actualAmountSymbol}` : ""
+                    }`
+                  : "Unavailable"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt>Actual fee</dt>
+              <dd className="font-mono">
+                {actualFee !== null
+                  ? `${actualFee}${actualFeeSymbol ? ` ${actualFeeSymbol}` : ""}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+        </>
       )}
 
       {error && (
