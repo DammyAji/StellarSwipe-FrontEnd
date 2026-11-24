@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { toast } from "@/lib/toast";
-import { t } from "@/lib/i18n";
+import { t, formatDate } from "@/lib/i18n";
 import {
   useSnoozeStore,
   DEFAULT_SNOOZE_DURATION_MS,
@@ -29,11 +29,31 @@ export function useSnoozeActions() {
     (
       id: string,
       label: string,
-      durationMs: number = DEFAULT_SNOOZE_DURATION_MS
+      durationMs: number = DEFAULT_SNOOZE_DURATION_MS,
+      until?: Date | number
     ) => {
-      snoozeSignal(id, durationMs);
+      let effectiveDurationMs = durationMs;
+      let returnTime: Date | null = null;
+
+      if (until !== undefined) {
+        const untilMs = until instanceof Date ? until.getTime() : until;
+        if (typeof untilMs !== "number" || !Number.isFinite(untilMs)) {
+          throw new Error("Invalid snooze return time: expected a valid date.");
+        }
+        const now = Date.now();
+        if (untilMs <= now) {
+          throw new Error("Invalid snooze return time: must be in the future.");
+        }
+        effectiveDurationMs = untilMs - now;
+        returnTime = new Date(untilMs);
+      }
+
+      snoozeSignal(id, effectiveDurationMs);
+      const description = returnTime
+        ? `${label} will return on ${formatDate(returnTime)}.`
+        : `${label} is hidden for ${formatDuration(effectiveDurationMs)}.`;
       toast.info("Signal snoozed", {
-        description: `${label} is hidden for ${formatDuration(durationMs)}.`,
+        description,
         duration: 4500,
         action: {
           label: "Undo",

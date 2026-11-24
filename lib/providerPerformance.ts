@@ -36,6 +36,27 @@ export interface ProviderPerformance {
   window: { from: string | null; to: string | null };
 }
 
+/**
+ * Returns the deduplicated, sorted list of Stellar asset codes covered by a
+ * provider's signals.
+ *
+ * Rules:
+ * - Asset codes are trimmed and upper-cased so casing/whitespace variants of
+ *   the same asset collapse into one entry.
+ * - Missing, empty or whitespace-only asset values are ignored.
+ * - No assets are fabricated: an empty input yields an empty array.
+ */
+export function getCoveredAssets(signals: { asset?: string }[]): string[] {
+  const assets = new Set<string>();
+
+  for (const signal of signals) {
+    const asset = signal.asset?.trim().toUpperCase();
+    if (asset) assets.add(asset);
+  }
+
+  return [...assets].sort();
+}
+
 export function computeProviderPerformance(
   signals: ProviderSignal[],
   { from, to }: ProviderPerformanceOptions = {},

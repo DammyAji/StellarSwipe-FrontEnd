@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ThumbsUp, ThumbsDown, Sparkles } from "lucide-react";
 import { useRecommendationStore } from "@/store/useRecommendationStore";
 import { MarketContextChangeIndicator } from "@/components/MarketContextChangeIndicator";
+import { EvidenceLinks } from "@/components/EvidenceLinks";
 import type { MarketContextSnapshot } from "@/lib/marketContextChange";
 import {
   computeRecommendations,
@@ -122,6 +123,9 @@ export function SignalRecommendations({
               <MarketContextChangeIndicator
                 context={marketContextBySignalId[rec.signalId]}
               />
+
+              {/* Supporting evidence links (rendered only when present) */}
+              <EvidenceLinks evidence={signal.evidence} />
 
               {/* Reasons with link to factors page */}
               <div className="space-y-0.5">

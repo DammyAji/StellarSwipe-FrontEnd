@@ -23,6 +23,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { ListStateIndicator } from "@/components/ui/list-state-indicator";
+import { DataPanelError } from "@/components/ui/data-panel-error";
+import { NetworkErrorState } from "@/components/ui/network-error-state";
+import { SignalEmptyState } from "@/components/provider/SignalEmptyState";
+import { ProviderCoveredAssets } from "@/components/provider/ProviderCoveredAssets";
+import { useProviderSignalScope } from "@/hooks/useProviderSignalScope";
 import { PageTransition } from "@/components/PageTransition";
 import { UnfollowDialog } from "@/components/UnfollowDialog";
 import { useUnfollowDialog } from "@/hooks/useUnfollowDialog";
@@ -96,6 +102,22 @@ const RANGE_OPTIONS = [
 
 type RangeKey = (typeof RANGE_OPTIONS)[number]["key"];
 
+// Signal scope options for the active / archived / combined view.
+const SIGNAL_SCOPE_OPTIONS = [
+  { key: "active", label: "Active" },
+  { key: "archived", label: "Archived" },
+  { key: "all", label: "All" },
+] as const;
+
+const SIGNAL_SCOPE_LABELS: Record<
+  (typeof SIGNAL_SCOPE_OPTIONS)[number]["key"],
+  string
+> = {
+  active: "active",
+  archived: "archived",
+  all: "active and archived",
+};
+
 interface PerformancePoint {
   date: string;
   value: number;
@@ -134,10 +156,39 @@ export default function ProviderProfilePage() {
   const params = useParams();
   const providerId = params?.providerId as string;
 
-  const { data: provider, isLoading: providerLoading } =
-    useProviderProfile(providerId);
-  const { data: signals = [], isFetching: signalsFetching } =
-    useProviderSignals(providerId);
+  const {
+    data: provider,
+    isLoading: providerLoading,
+    isError: providerError,
+    refetch: refetchProvider,
+  } = useProviderProfile(providerId);
+
+  // Active / archived / combined signal view. The selection is persisted so it
+  // survives navigating away and back, and is reflected in the URL.
+  const { scope, setScope } = useProviderSignalScope(providerId);
+
+  const {
+    data: signals = [],
+    isFetching: signalsFetching,
+    isLoading: signalsLoading,
+    isError: signalsError,
+    refetch: refetchSignals,
+  } = useProviderSignals(providerId, scope);
+
+  // Deduplicated list of Stellar assets this provider has covered, derived
+  // from the profile data. Empty when the profile has no coverage data.
+  const coveredAssets = useMemo(() => {
+    const assets = provider?.coveredAssets ?? [];
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const asset of assets) {
+      const key = asset.trim().toUpperCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      unique.push(asset.trim());
+    }
+    return unique;
+  }, [provider?.coveredAssets]);
 
   // Follow state is shared with the signal feed's "Followed" filter.
   // Feed signals identify their provider by name, so follows are keyed the same way.
@@ -173,7 +224,7 @@ export default function ProviderProfilePage() {
   } = usePaginationClamp({
     totalItems: signals.length,
     pageSize: SIGNALS_PER_PAGE,
-    resetKey: providerId,
+    resetKey: `${providerId}:${scope}`,
   });
   const paginatedSignals = signals.slice(offset, offset + SIGNALS_PER_PAGE);
 
@@ -320,6 +371,21 @@ export default function ProviderProfilePage() {
       <PageTransition>
         <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 sm:gap-8 sm:p-8 bg-gray-950">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </main>
+      </PageTransition>
+    );
+  }
+
+  if (providerError) {
+    return (
+      <PageTransition>
+        <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-4 sm:gap-8 sm:p-8 bg-gray-950">
+          <NetworkErrorState
+            title="Couldn't load this provider"
+            description="We couldn't load the provider profile. Check your connection and try again."
+            onRetry={() => refetchProvider()}
+          />
+          <Button onClick={() => router.back()}>Go Back</Button>
         </main>
       </PageTransition>
     );
@@ -477,7 +543,90 @@ export default function ProviderProfilePage() {
           defaultPageContext={`Provider profile · ${selectedRange.label} performance`}
         />
 
-        {/* … rest of profile content unchanged … */}
+        {/* Covered assets */}
+        <ProviderCoveredAssets
+          assets={coveredAssets}
+          isLoading={providerLoading}
+          providerId={providerId ?? ""}
+        />
+
+        {/* Signals with active / archived / combined scope */}
+        <section
+          className="rounded-lg border border-gray-800 bg-gray-900 p-4"
+          aria-labelledby="provider-signals-heading"
+        >
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2
+              id="provider-signals-heading"
+              className="text-sm font-semibold text-foreground"
+            >
+              Signals
+            </h2>
+            <div
+              role="group"
+              aria-label="Filter signals by status"
+              className="flex gap-1"
+            >
+              {SIGNAL_SCOPE_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setScope(option.key)}
+                  aria-pressed={scope === option.key}
+                  className={`rounded px-2 py-1 text-xs transition-colors ${
+                    scope === option.key
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-800 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {signalsLoading ? (
+            <ListStateIndicator
+              state="loading"
+              label={`Loading ${SIGNAL_SCOPE_LABELS[scope]} signals`}
+            />
+          ) : signalsError ? (
+            <DataPanelError
+              title="Couldn't load signals"
+              description={`We couldn't load ${SIGNAL_SCOPE_LABELS[scope]} signals for this provider.`}
+              onRetry={() => refetchSignals()}
+            />
+          ) : signals.length === 0 ? (
+            <SignalEmptyState scope={scope} />
+          ) : (
+            <>
+              {signalsFetching && (
+                <ListStateIndicator
+                  state="refreshing"
+                  label={`Refreshing ${SIGNAL_SCOPE_LABELS[scope]} signals`}
+                />
+              )}
+              <ul className="flex flex-col gap-2">
+                {paginatedSignals.map((signal) => (
+                  <li
+                    key={signal.id}
+                    className="rounded border border-gray-800 bg-gray-950 p-3 text-sm text-foreground"
+                  >
+                    {signal.asset ?? "Unknown asset"}
+                  </li>
+                ))}
+              </ul>
+              <PaginationControls
+                page={currentPage}
+                totalPages={totalPages}
+                canGoPrevious={canGoPrevious}
+                canGoNext={canGoNext}
+                onPrevious={goToPrevious}
+                onNext={goToNext}
+              />
+            </>
+          )}
+        </section>
       </main>
     </PageTransition>
   );

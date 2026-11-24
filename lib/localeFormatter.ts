@@ -167,3 +167,46 @@ export function formatWithUnit(
   const formatted = formatNumber(value, options);
   return `${formatted}\u00A0${unit}`; // \u00A0 is non-breaking space
 }
+
+/**
+ * Formats a date and time using locale-aware date and time styles.
+ * Returns "-" for invalid dates.
+ *
+ * @example
+ * formatDateTime(new Date('2024-05-01T14:30:00'), 'en-US')  // "5/1/24, 2:30 PM"
+ * formatDateTime(new Date('2024-05-01T14:30:00'), 'de-DE')  // "01.05.24, 14:30"
+ */
+export function formatDateTime(
+  date: Date | number | string,
+  locale?: Locale | string
+): string {
+  const localeTag = typeof locale === "string" 
+    ? locale 
+    : LOCALE_BCP47[locale || (getCurrentLocale() as Locale)];
+
+  const parsed = date instanceof Date ? date : new Date(date);
+  if (isNaN(parsed.getTime())) return "-";
+
+  return new Intl.DateTimeFormat(localeTag, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+/**
+ * Parses a `datetime-local` input value (e.g., "2024-05-01T14:30") into a Date.
+ * Returns null when the value is empty or does not represent a valid date/time.
+ *
+ * @example
+ * parseLocalDateTimeInput("2024-05-01T14:30")  // Date
+ * parseLocalDateTimeInput("")                  // null
+ * parseLocalDateTimeInput("not-a-date")        // null
+ */
+export function parseLocalDateTimeInput(value: string): Date | null {
+  if (!value || typeof value !== "string") return null;
+
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime())) return null;
+
+  return parsed;
+}

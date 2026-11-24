@@ -15,6 +15,11 @@ import {
   type DisplayCurrency,
 } from "@/store/useCurrencyStore";
 import { useFeedDensityStore, type FeedDensity } from "@/store/useFeedDensityStore";
+import {
+  TRADE_ENTRY_MODE_LABELS,
+  useTradeEntryModeStore,
+  type TradeEntryMode,
+} from "@/store/useTradeEntryModeStore";
 import { useDataSaverStore } from "@/store/useDataSaverStore";
 import {
   SENSITIVITY_MULTIPLIERS,
@@ -112,6 +117,14 @@ export const SETTINGS_REGISTRY: SettingDefinition[] = [
     format: (v) => (v === "compact" ? "Compact" : "Comfortable"),
     restore: (v) => useFeedDensityStore.getState().setDensity(v),
     isValid: (v): v is FeedDensity => v === "compact" || v === "comfortable",
+  }),
+  storeSetting(useTradeEntryModeStore, (s) => s.entryMode, {
+    id: "tradeEntryMode",
+    label: "Default trade amount entry",
+    format: (v) => TRADE_ENTRY_MODE_LABELS[v] ?? v,
+    restore: (v) => useTradeEntryModeStore.getState().setEntryMode(v),
+    isValid: (v): v is TradeEntryMode =>
+      typeof v === "string" && v in TRADE_ENTRY_MODE_LABELS,
   }),
   storeSetting(useDataSaverStore, (s) => s.dataSaverEnabled, {
     id: "dataSaver",
