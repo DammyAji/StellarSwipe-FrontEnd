@@ -21,6 +21,27 @@ import { applyCorsHeaders } from "@/lib/cors";
 const SIGNALS_ALLOWED_METHODS = ["GET", "POST", "OPTIONS"];
 const SIGNALS_ALLOWED_HEADERS = ["Content-Type", "Authorization"];
 
+// Read state is tracked per user, independently from bookmarks and dismissal.
+const readSignalsByUser = new Map<string, Set<string>>();
+
+function getReadSignals(userId: string): Set<string> {
+  let read = readSignalsByUser.get(userId);
+  if (!read) {
+    read = new Set<string>();
+    readSignalsByUser.set(userId, read);
+  }
+  return read;
+}
+
+function isSignalRead(userId: string | null, signalId: string): boolean {
+  if (!userId) return false;
+  return getReadSignals(userId).has(signalId);
+}
+
+function markSignalRead(userId: string, signalId: string): void {
+  getReadSignals(userId).add(signalId);
+}
+
 function withCors(request: Request, response: NextResponse) {
   return applyCorsHeaders(request, response, {
     methods: SIGNALS_ALLOWED_METHODS,
@@ -168,9 +189,11 @@ export async function GET(request: Request) {
 /**
  * POST /api/signals
  *
- * Dismisses a signal for the authenticated user.
+ * Dismisses a signal for the authenticated user, or marks it as read when
+ * `action` is "read". Read state is tracked independently from bookmarks and
+ * dismissal.
  *
- * Body: { signalId: string; reason?: string }
+ * Body: { signalId: string; reason?: string; action?: "dismiss" | "read" }
  */
 export async function POST(request: Request) {
   const userId = getRequestUserId(request);
@@ -205,6 +228,7 @@ export async function POST(request: Request) {
   const payload = (body ?? {}) as {
     signalId?: unknown;
     reason?: unknown;
+    action?: unknown;
   };
 
   const signalId =
@@ -214,10 +238,28 @@ export async function POST(request: Request) {
     return withCors(
       request,
       NextResponse.json(
-        { error: "signalId is required to dismiss a recommendation." },
+        { error: "signalId is required to update a recommendation." },
         { status: 400 }
       )
     );
+  }
+
+  // Marking a signal read is independent from dismissal and bookmarks.
+  if (payload.action === "read") {
+    const read = await traceWorker(
+      "worker:signals:read",
+      async () => {
+        markSignalRead(userId, signalId);
+
+        return {
+          signalId,
+          read: true,
+        };
+      },
+      { signalId }
+    );
+
+    return withCors(request, NextResponse.json(read, { status: 200 }));
   }
 
   // Feedback is optional: skipping the reason must not block dismissal.

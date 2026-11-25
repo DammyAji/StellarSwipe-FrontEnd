@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestUserId } from "@/lib/providerFollows";
-import { getUserSignalState, updateSignalAnnotation } from "@/lib/signalState";
+import {
+  getUserSignalState,
+  markSignalRead,
+  updateSignalAnnotation,
+} from "@/lib/signalState";
 
 /**
  * GET /api/signals/state
@@ -19,11 +23,13 @@ export async function GET(req: NextRequest) {
 
 /**
  * PATCH /api/signals/state
- * Creates or edits the caller's private note and tags for a bookmarked signal.
+ * Creates or edits the caller's private note and tags for a bookmarked signal,
+ * or marks a signal as read when the user opens it. Read state is tracked
+ * independently from bookmarks and dismissals.
  * Annotations are keyed by user + signal so they stay attached to the correct
  * signal after reload, and never touch provider content.
  *
- * Body: { signalId: string, note?: string | null, tags?: string[] }
+ * Body: { signalId: string, note?: string | null, tags?: string[], read?: boolean }
  */
 export async function PATCH(req: NextRequest) {
   const userId = getRequestUserId(req);
@@ -43,10 +49,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { signalId, note, tags } = body as {
+  const { signalId, note, tags, read } = body as {
     signalId?: unknown;
     note?: unknown;
     tags?: unknown;
+    read?: unknown;
   };
 
   if (typeof signalId !== "string" || signalId.trim() === "") {
@@ -64,6 +71,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "tags must be an array of strings" }, { status: 400 });
   }
 
+  if (read !== undefined && typeof read !== "boolean") {
+    return NextResponse.json({ error: "read must be a boolean" }, { status: 400 });
+  }
+
   const normalizedTags =
     tags === undefined
       ? undefined
@@ -74,6 +85,23 @@ export async function PATCH(req: NextRequest) {
               .filter((tag) => tag.length > 0),
           ),
         );
+
+  const hasAnnotationUpdate = note !== undefined || normalizedTags !== undefined;
+
+  if (!hasAnnotationUpdate && read === undefined) {
+    return NextResponse.json(
+      { error: "No updates provided" },
+      { status: 400 },
+    );
+  }
+
+  if (read === true) {
+    markSignalRead(userId, signalId);
+  }
+
+  if (!hasAnnotationUpdate) {
+    return NextResponse.json(getUserSignalState(userId), { status: 200 });
+  }
 
   const updated = updateSignalAnnotation(userId, signalId, {
     ...(note !== undefined ? { note: note === null ? null : (note as string) } : {}),
