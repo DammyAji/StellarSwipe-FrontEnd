@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { SignalFeedServer } from "@/components/signal/SignalFeedServer";
 import { SignalCardSkeleton } from "@/components/SignalCardSkeleton";
+import { TransactionHistory } from "@/components/history/TransactionHistory";
 
 function SignalFeedSkeleton() {
   return (
@@ -24,6 +25,9 @@ export default function AppPage() {
       <Suspense fallback={<SignalFeedSkeleton />}>
         <SignalFeedServer />
       </Suspense>
+      <section className="mt-6" aria-label="Transaction history">
+        <TransactionHistory />
+      </section>
     </AppShell>
   );
 }

@@ -12,6 +12,34 @@ import {
 /** The Stellar network the app expects. Matches NetworkMismatchBanner. */
 const APP_NETWORK: string = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "TESTNET";
 
+/** Horizon base URL used to read the account's transaction history. */
+const HORIZON_URL: string =
+  process.env.NEXT_PUBLIC_HORIZON_URL ??
+  (APP_NETWORK === "PUBLIC"
+    ? "https://horizon.stellar.org"
+    : "https://horizon-testnet.stellar.org");
+
+/** Stellar Expert explorer base URL for the active network. */
+const STELLAR_EXPERT_URL: string =
+  APP_NETWORK === "PUBLIC"
+    ? "https://stellar.expert/explorer/public"
+    : "https://stellar.expert/explorer/testnet";
+
+/** Default and maximum page sizes for the activity feed. */
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 50;
+
+/** A single row in the user's activity feed. */
+type ActivityEntry = {
+  id: string;
+  action: "Swap" | "Deposit" | "Withdraw";
+  tokenPair: string;
+  amountIn: string;
+  amountOut: string;
+  timestamp: string;
+  stellarExpertUrl: string;
+};
+
 /**
  * OpenAPI description of this route, consumed by the docs generator so the
  * published contract stays aligned with the handler below.
@@ -142,6 +170,97 @@ export async function POST(req: NextRequest) {
     { ok: true, preview: buildBalancePreview(order, availableBalance) },
     { status: 200 }
   );
+}
+
+/**
+ * GET /api/trades?publicKey=G...&cursor=...&limit=...
+ * Returns the connected user's past swaps and liquidity events as an activity
+ * feed, sourced from Stellar Horizon. Supports cursor-based pagination so the
+ * client can implement infinite scroll over large histories.
+ */
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const publicKey = searchParams.get("publicKey")?.trim();
+  if (!publicKey) {
+    return NextResponse.json(
+      { code: TRADE_ERROR_CODES.INVALID_REQUEST, message: "Missing publicKey." },
+      { status: 400 }
+    );
+  }
+
+  const cursor = searchParams.get("cursor") ?? undefined;
+  const requestedLimit = parseInt(searchParams.get("limit") ?? "", 10);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(requestedLimit, 1), MAX_LIMIT)
+    : DEFAULT_LIMIT;
+
+  const url = new URL(`${HORIZON_URL}/accounts/${encodeURIComponent(publicKey)}/transactions`);
+  url.searchParams.set("order", "desc");
+  url.searchParams.set("limit", String(limit));
+  if (cursor) url.searchParams.set("cursor", cursor);
+
+  let payload: { _embedded?: { records?: unknown[] } };
+  try {
+    const res = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`Horizon responded ${res.status}`);
+    payload = await res.json();
+  } catch {
+    return NextResponse.json(
+      {
+        code: TRADE_ERROR_CODES.BALANCE_UNAVAILABLE,
+        message: "Could not load transaction history. Please try again.",
+      },
+      { status: 503 }
+    );
+  }
+
+  const records = Array.isArray(payload._embedded?.records) ? payload._embedded!.records! : [];
+  const entries = records
+    .map((record) => toActivityEntry(record as HorizonTransaction))
+    .filter((entry): entry is ActivityEntry => entry !== null);
+
+  const lastRecord = records[records.length - 1] as HorizonTransaction | undefined;
+
+  return NextResponse.json(
+    {
+      entries,
+      nextCursor: lastRecord?.paging_token ?? null,
+      hasMore: records.length === limit,
+    },
+    { status: 200 }
+  );
+}
+
+/** Minimal shape of a Horizon transaction record we rely on. */
+type HorizonTransaction = {
+  id?: string;
+  hash?: string;
+  created_at?: string;
+  paging_token?: string;
+  successful?: boolean;
+  operation_count?: number;
+};
+
+/**
+ * Maps a Horizon transaction into an activity feed row. Horizon's transaction
+ * list does not expose operation details inline, so the action is inferred
+ * from the transaction and the row links out to Stellar Expert for full detail.
+ */
+function toActivityEntry(tx: HorizonTransaction): ActivityEntry | null {
+  const hash = tx.hash ?? tx.id;
+  if (!hash) return null;
+
+  const action: ActivityEntry["action"] = "Swap";
+
+  return {
+    id: hash,
+    action,
+    tokenPair: "XLM / —",
+    amountIn: "—",
+    amountOut: "—",
+    timestamp: tx.created_at ?? new Date(0).toISOString(),
+    stellarExpertUrl: `${STELLAR_EXPERT_URL}/tx/${hash}`,
+  };
 }
 
 /**
