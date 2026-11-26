@@ -19,6 +19,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { ToastViewport } from "@/components/ToastViewport";
 import { DesktopNavRail } from "@/components/DesktopNavRail";
 import { DemoModeIndicator } from "@/components/DemoModeIndicator";
+import { WalletProvider } from "@/components/WalletProvider";
 
 // Dev-only overlays (~950 lines combined) render null in production but were
 // previously statically imported into every page's root layout bundle. They
@@ -107,36 +108,40 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <Providers>
-          {/* Skip link — visually hidden until focused; lets keyboard users bypass nav */}
-          <a href="#main-content" className="skip-link">
-            Skip to main content
-          </a>
-          <NetworkStatusIndicator />
-          <DemoModeIndicator />
-          <RouteAnnouncer />
-          <ScrollRestoration />
-          <WebVitalsReporting />
-          <Navbar />
-          <MobileNav />
-          <PageTransitionPlaceholder />
-          {/* id="main-content" is the skip-link target; pages provide the <main> landmark */}
-          {/* #757 — Collapsible desktop navigation rail sits alongside page content */}
-          <div id="main-content" tabIndex={-1} className="outline-none flex">
-            <DesktopNavRail />
-            <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
-          </div>
-          <TradeStatusBanner />
-          <TransactionFailure />
-          <DevPerfOverlay />
-          <AnalyticsDebugConsole />
-          <ComparisonTray />
-          <NotificationPermissionPrompt />
-          <PWAInstallPrompt />
-          <GuidedTourSpotlight />
-          {/* Bounded, non-overlapping toast region. Positioned below the fixed
-              navbar and above the mobile nav / primary form actions so queued
-              messages never cover navigation or submit buttons. */}
-          <ToastViewport />
+          {/* Wallet connection state (Freighter & Albedo) is provided app-wide
+              so the navbar and any page can read the connected public key. */}
+          <WalletProvider>
+            {/* Skip link — visually hidden until focused; lets keyboard users bypass nav */}
+            <a href="#main-content" className="skip-link">
+              Skip to main content
+            </a>
+            <NetworkStatusIndicator />
+            <DemoModeIndicator />
+            <RouteAnnouncer />
+            <ScrollRestoration />
+            <WebVitalsReporting />
+            <Navbar />
+            <MobileNav />
+            <PageTransitionPlaceholder />
+            {/* id="main-content" is the skip-link target; pages provide the <main> landmark */}
+            {/* #757 — Collapsible desktop navigation rail sits alongside page content */}
+            <div id="main-content" tabIndex={-1} className="outline-none flex">
+              <DesktopNavRail />
+              <div className="min-w-0 flex-1 pb-20 md:pb-0">{children}</div>
+            </div>
+            <TradeStatusBanner />
+            <TransactionFailure />
+            <DevPerfOverlay />
+            <AnalyticsDebugConsole />
+            <ComparisonTray />
+            <NotificationPermissionPrompt />
+            <PWAInstallPrompt />
+            <GuidedTourSpotlight />
+            {/* Bounded, non-overlapping toast region. Positioned below the fixed
+                navbar and above the mobile nav / primary form actions so queued
+                messages never cover navigation or submit buttons. */}
+            <ToastViewport />
+          </WalletProvider>
         </Providers>
       </body>
     </html>

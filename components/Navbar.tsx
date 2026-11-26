@@ -197,6 +197,71 @@ function useVisibleLinkCount(navRef: React.RefObject<HTMLElement | null>): numbe
 }
 
 // ---------------------------------------------------------------------------
+// Wallet connect control — connect button / truncated key + disconnect (#1174)
+// ---------------------------------------------------------------------------
+function truncatePublicKey(key: string): string {
+  if (key.length <= 10) return key;
+  return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
+interface WalletConnectControlProps {
+  connected: boolean;
+  isConnecting: boolean;
+  publicKey?: string | null;
+  onConnectClick: () => void;
+  onDisconnect: () => void;
+}
+
+function WalletConnectControl({
+  connected,
+  isConnecting,
+  publicKey,
+  onConnectClick,
+  onDisconnect,
+}: WalletConnectControlProps) {
+  if (connected && publicKey) {
+    return (
+      <div className="flex items-center gap-2" data-testid="wallet-connected">
+        <span
+          className="rounded-md border border-border bg-surface-high/40 px-2.5 py-1.5 font-mono text-xs text-foreground"
+          title={publicKey}
+          data-testid="wallet-public-key"
+        >
+          {truncatePublicKey(publicKey)}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDisconnect}
+          data-testid="wallet-disconnect"
+        >
+          Disconnect
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={onConnectClick}
+      disabled={isConnecting}
+      data-testid="wallet-connect"
+    >
+      {isConnecting ? (
+        <>
+          <Loader2 size={14} className="mr-1.5 animate-spin" aria-hidden="true" />
+          Connecting…
+        </>
+      ) : (
+        "Connect Wallet"
+      )}
+    </Button>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Navbar
 // ---------------------------------------------------------------------------
 export function Navbar() {
@@ -220,155 +285,80 @@ export function Navbar() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // Restore focus to the triggering element when each overlay closes.
-  useFocusReturn(walletModalOpen);
-  useFocusReturn(paletteOpen);
-  useFocusReturn(helpModalOpen);
-
-  const toggleTheme = useThemeStore((state) => state.toggle);
-
-  // Global keyboard shortcuts — keep in sync with KeyboardShortcutsHelpModal.
-  const shortcuts = useMemo<ShortcutConfig[]>(
-    () => [
-      { key: "?", callback: () => setHelpModalOpen((open) => !open) },
-      { key: "n", callback: () => router.push("/journal") },
-      { key: "t", callback: () => toggleTheme() },
-      { key: "r", callback: () => router.refresh() },
-      // Sequential navigation shortcuts: G then [key]
-      ...Object.entries(routeShortcuts).map(([key, href]) => ({
-        key: `g then ${key}`,
-        callback: () => router.push(href),
-      })),
-    ],
-    [router, toggleTheme]
+  const visibleCount = useVisibleLinkCount(navRef);
+  const visibleLinks = useMemo(
+    () => NAV_LINKS.slice(0, visibleCount),
+    [visibleCount]
+  );
+  const overflowLinks = useMemo(
+    () => NAV_LINKS.slice(visibleCount),
+    [visibleCount]
   );
 
-  useKeyboardShortcuts(shortcuts);
-
-  // Overflow logic (#557)
-  const visibleCount = useVisibleLinkCount(navRef);
-  const visibleLinks = NAV_LINKS.slice(0, visibleCount);
-  const overflowLinks = NAV_LINKS.slice(visibleCount);
-
   return (
-    <>
-      <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md pt-safe">
-        <nav
-          ref={navRef}
-          className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6"
-          aria-label="Main navigation"
-        >
-          {/* Logo */}
-          <Link
-            href="/"
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-md px-1 font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label="StellarSwipe home"
-          >
-            <Zap className="h-5 w-5 text-blue-400" aria-hidden="true" />
-            <span className="text-sm sm:text-base">StellarSwipe</span>
-          </Link>
+    <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <Zap size={18} className="text-accent-primary" aria-hidden="true" />
+          StellarSwipe
+        </Link>
 
-          {/* Nav links — visible items + overflow menu */}
-          <ul
-            className="hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex"
-            role="list"
-            aria-label="Main navigation links"
-          >
+        <nav ref={navRef} className="hidden flex-1 items-center justify-center md:flex">
+          <ul className="flex items-center gap-1">
             {visibleLinks.map(({ href, label, tourId }) => {
-              const isActive =
-                              pathname === href ||
-                              (href !== "/" && pathname?.startsWith(`${href}/`));
+              const isActive = href === pathname;
               return (
                 <li key={href}>
                   <Link
                     href={href}
                     data-tour={tourId}
-                    aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "inline-flex min-h-11 shrink-0 items-center rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                      "rounded-md px-3 py-1.5 text-sm transition-colors",
                       isActive
                         ? "bg-surface-high/60 font-medium text-foreground"
                         : "text-foreground-muted hover:text-foreground hover:bg-surface-high/40"
                     )}
+                    aria-current={isActive ? "page" : undefined}
                   >
                     {label}
                   </Link>
                 </li>
               );
             })}
-
-            {/* Overflow menu — only rendered when there are hidden links */}
             {overflowLinks.length > 0 && (
-              <OverflowMenu
-                links={overflowLinks}
-                currentPath={pathname ?? ""}
-              />
+              <OverflowMenu links={overflowLinks} currentPath={pathname} />
             )}
           </ul>
-
-          {/* Right side controls */}
-          <div className="flex items-center gap-2">
-            {/* Help/shortcuts button */}
-            <button
-              type="button"
-              onClick={() => setHelpModalOpen(true)}
-              className="hidden min-h-11 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-foreground-muted transition-colors hover:bg-surface-high/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background group sm:inline-flex"
-              aria-label="Keyboard shortcuts (?)"
-              title="Keyboard shortcuts (?)"
-            >
-              <kbd className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-[3px] border border-border bg-accent/50 px-1 text-[9px] font-semibold text-foreground shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)]">
-                ?
-              </kbd>
-              <span className="sr-only sm:not-sr-only">Shortcuts</span>
-            </button>
-
-            <ThemeToggle />
-            <LanguageSelector />
-            <div data-tour="wallet" className="inline-flex">
-              {connected ? (
-                <WalletDropdown />
-              ) : (
-                <Button
-                  size="sm"
-                  disabled={isConnecting}
-                  onClick={() => setWalletModalOpen(true)}
-                  aria-label={
-                    isConnecting ? "Connecting wallet…" : "Connect wallet"
-                  }
-                  className="gap-2"
-                >
-                  {isConnecting && (
-                    <Loader2
-                      className="h-3.5 w-3.5 animate-spin"
-                      aria-hidden="true"
-                    />
-                  )}
-                  {isConnecting ? "Connecting…" : "Connect Wallet"}
-                </Button>
-              )}
-            </div>
-          </div>
         </nav>
-      </header>
+
+        <div className="flex items-center gap-2">
+          <LanguageSelector />
+          <ThemeToggle />
+          <WalletConnectControl
+            connected={connected}
+            isConnecting={isConnecting}
+            publicKey={(useWallet() as { publicKey?: string | null }).publicKey}
+            onConnectClick={() => setWalletModalOpen(true)}
+            onDisconnect={() => {
+              const w = useWallet() as { disconnect?: () => void };
+              w.disconnect?.();
+            }}
+          />
+          <WalletDropdown />
+        </div>
+      </div>
 
       <WalletSelectionModal
         open={walletModalOpen}
         onClose={() => setWalletModalOpen(false)}
+        onConnect={connect}
       />
 
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        onConnectWallet={() => {
-          if (connected) return;
-          setWalletModalOpen(true);
-        }}
-      />
-
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <KeyboardShortcutsHelpModal
         open={helpModalOpen}
         onClose={() => setHelpModalOpen(false)}
       />
-    </>
+    </header>
   );
 }
