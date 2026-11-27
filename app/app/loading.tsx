@@ -15,7 +15,32 @@ export default function AppLoading() {
           <div className="flex flex-col gap-4">
             <div className="h-10 w-full animate-pulse rounded-2xl bg-surface-high" />
             <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => (
+              <div className="flex items-center justify-between">
+                <div className="h-6 w-24 animate-pulse rounded-lg bg-surface-high" />
+                <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-high" />
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                <div className="h-4 w-16 animate-pulse rounded bg-surface-high" />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 flex-1 animate-pulse rounded-lg bg-surface-high" />
+                  <div className="h-10 w-28 animate-pulse rounded-lg bg-surface-high" />
+                </div>
+              </div>
+              <div className="flex justify-center">
+                <div className="h-8 w-8 animate-pulse rounded-full bg-surface-high" />
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 space-y-3">
+                <div className="h-4 w-16 animate-pulse rounded bg-surface-high" />
+                <div className="flex items-center gap-3">
+                  <div className="h-10 flex-1 animate-pulse rounded-lg bg-surface-high" />
+                  <div className="h-10 w-28 animate-pulse rounded-lg bg-surface-high" />
+                </div>
+              </div>
+              <div className="h-4 w-40 animate-pulse rounded bg-surface-high" />
+              <div className="h-12 w-full animate-pulse rounded-2xl bg-surface-high" />
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-6 space-y-4">
+              {Array.from({ length: 2 }).map((_, i) => (
                 <SignalCardSkeleton key={i} />
               ))}
             </div>

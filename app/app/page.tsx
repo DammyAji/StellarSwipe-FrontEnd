@@ -1,4 +1,6 @@
-import { Suspense } from "react";
+"use client";
+
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { SignalFeedServer } from "@/components/signal/SignalFeedServer";
 import { SignalCardSkeleton } from "@/components/SignalCardSkeleton";
@@ -19,12 +21,26 @@ function SignalFeedSkeleton() {
   );
 }
 
+      <div className="space-y-4">
+        <LiquidityManager />
+        <SwapInterface />
+        <Suspense fallback={<SignalFeedSkeleton />}>
+          <SignalFeedServer />
+        </Suspense>
+      </div>
+  );
+}
+
 export default function AppPage() {
   return (
     <AppShell>
-      <Suspense fallback={<SignalFeedSkeleton />}>
-        <SignalFeedServer />
-      </Suspense>
+      <div className="space-y-4">
+        <LiquidityManager />
+        <SwapInterface />
+        <Suspense fallback={<SignalFeedSkeleton />}>
+          <SignalFeedServer />
+        </Suspense>
+      </div>
       <section className="mt-6" aria-label="Transaction history">
         <TransactionHistory />
       </section>
