@@ -240,28 +240,18 @@ function estimateBalances(quote: Quote) {
 function toResponse(quote: Quote) {
   return {
     quoteId: quote.quoteId,
-    status: "valid",
     asset: quote.asset,
     direction: quote.direction,
     inputMode: quote.inputMode,
     amount: quote.amount,
-    wallet: quote.wallet,
-    network: quote.network,
-    estimates: {
-      price: quote.price,
-      assetAmount: quote.assetAmount,
-      fiatAmount: quote.fiatAmount,
-      total: quote.total,
-      fee: quote.fee,
-      slippageBps: quote.slippageBps,
-    },
-    // Estimated before/after balances for the review step. Values are
-    // derived from the quoted amount and displayed fee; missing inputs are
-    // labeled `unavailable`.
-    balancePreview: estimateBalances(quote),
-    // Timestamp of the rate used for this conversion so the UI can label
-    // freshness and refuse to reuse a stale conversion.
-    quotedAt: new Date(quote.quotedAt).toISOString(),
-    expiresAt: new Date(quote.expiresAt).toISOString(),
+    price: quote.price,
+    assetAmount: quote.assetAmount,
+    fiatAmount: quote.fiatAmount,
+    total: quote.total,
+    fee: quote.fee,
+    slippageBps: quote.slippageBps,
+    quotedAt: quote.quotedAt,
+    expiresAt: quote.expiresAt,
+    balances: estimateBalances(quote),
   };
 }
